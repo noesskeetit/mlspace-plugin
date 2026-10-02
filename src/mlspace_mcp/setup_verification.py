@@ -1,0 +1,95 @@
+"""Check installed release contents and a real MCP process without API writes."""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Any
+
+import anyio
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+from . import __version__
+from .client_setup import _config, _read_config, _skill_sources
+from .config import Settings, read_dotenv_file
+from .native_plugins import inspect_native
+from .server import build_server
+from .workspace_context import environment_id, normalized_endpoint, selected_workspaces
+
+
+def verify_runtime(command: list[str], credentials: Path, *, direct: bool = False,
+                   cwd: Path | None = None) -> None:
+    """Native startup must find the saved pointer with no setup-only environment."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith('MLSPACE_')
+           and k not in ('XDG_CONFIG_HOME', 'SSL_CERT_FILE', 'SSL_CERT_DIR')}
+    if direct:
+        env['MLSPACE_ENV_FILE'] = str(credentials)
+    values = read_dotenv_file(credentials)
+    fields: dict[str, Any] = {key.removeprefix('MLSPACE_').lower(): value for key, value in values.items()
+              if key.startswith('MLSPACE_') and key.removeprefix('MLSPACE_').lower() in Settings.model_fields}
+    if 'workspaces' in fields:
+        fields['workspaces'] = json.loads(fields['workspaces'])
+    # Explicit defaults prevent ambient setup flags from changing the expected inventory.
+    fields.setdefault('readonly', False)
+    fields.setdefault('enabled_domains', '')
+    settings = Settings(_env_file=None, **fields)  # type: ignore[call-arg]
+
+    async def probe() -> None:
+        expected = await build_server(settings).list_tools()
+        parameters = StdioServerParameters(command=command[0], args=command[1:], env=env,
+                                           cwd=str(cwd or Path.home()))
+        with anyio.fail_after(90):
+            async with stdio_client(parameters, errlog=errors) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    tools = (await session.list_tools()).tools
+                    if {t.name: t.inputSchema for t in tools} != {t.name: t.inputSchema for t in expected}:
+                        raise ValueError('Tool inventory differs from this release')
+                    result = await session.call_tool('mlspace_contexts', {})
+                    catalogue = json.loads(result.content[0].text)  # type: ignore[union-attr]
+                    expected_catalogue = {
+                        'environment': environment_id(settings.base_url),
+                        'endpoint': normalized_endpoint(settings.base_url),
+                        'workspaces': [{'id': w.id, 'name': w.name, 'project_name': w.project_name}
+                                       for w in selected_workspaces(settings)],
+                    }
+                    if result.isError or catalogue != expected_catalogue:
+                        raise ValueError('Saved workspace catalogue differs')
+    logger = logging.getLogger('mcp.client.stdio')
+    was_disabled = logger.disabled
+    logger.disabled = True  # SDK parse errors include the raw child stdout.
+    try:
+        with open(os.devnull, 'w') as errors:
+            asyncio.run(probe())
+    except Exception as exc:
+        raise ValueError('MCP verification failed. Check the saved credentials/CA, uvx availability '
+                         'and access to PyPI, then rerun setup --force. Process output suppressed.') from exc
+    finally:
+        logger.disabled = was_disabled
+
+
+def verify_client(client: str, executable: str, credentials: Path, command: list[str]) -> None:
+    sources = _skill_sources()
+    if client == 'opencode':
+        config = _read_config(_config(client)).get('mcp', {}).get('mlspace', {})
+        if config.get('command') != command or config.get('enabled') is not True:
+            raise ValueError('opencode: installed MCP configuration differs; retry setup.')
+        root = Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'opencode/skills'
+        cwd = None
+    else:
+        status = inspect_native(client, executable)
+        if not status.enabled or status.version != __version__ or status.plugin_root is None:
+            raise ValueError(f'{client}: installed plugin version or enabled state differs; retry setup.')
+        cwd = status.plugin_root
+        root = cwd / 'skills'
+        config = json.loads((cwd / '.mcp.json').read_text())['mcpServers']['mlspace']
+        command = ['uvx', '--from', f'mlspace-plugin=={__version__}', 'mlspace-plugin', '--transport', 'stdio']
+        if config != {'type': 'stdio', 'command': command[0], 'args': command[1:]}:
+            raise ValueError(f'{client}: installed runtime command differs from this release.')
+    installed = {p.parent.name: p.read_text() for p in root.glob('mlspace-*/SKILL.md')}
+    if installed != sources:
+        raise ValueError(f'{client}: installed skills differ from this release; retry setup.')
+    verify_runtime(command, credentials, direct=client == 'opencode', cwd=cwd)
