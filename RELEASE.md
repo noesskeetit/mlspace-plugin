@@ -7,11 +7,11 @@
    `uv lock` и `uv run python scripts/gen_plugin.py`. Обновите примеры имён wheel/ZIP
    в инструкциях, если версия присутствует в имени файла.
 2. Выполните проверки из `CONTRIBUTING.md` на Linux и macOS.
-3. Соберите пакет (в командах ниже замените 0.3.1 на выпускаемую версию):
+3. Соберите пакет (в командах ниже замените 0.3.2 на выпускаемую версию):
 
 ```sh
-uv build --out-dir dist/release-0.3.1
-uv run python scripts/build_plugin.py --output dist/plugin-release-0.3.1
+uv build --out-dir dist/release-0.3.2
+uv run python scripts/build_plugin.py --output dist/plugin-release-0.3.2
 ```
 
 4. Просмотрите содержимое wheel, sdist и ZIP. В них не должно быть credentials,
@@ -23,11 +23,11 @@ uv run python scripts/build_plugin.py --output dist/plugin-release-0.3.1
    `UV_PUBLISH_TOKEN` средствами вашего хранилища секретов, не аргументом команды:
 
 ```sh
-uv publish --trusted-publishing never dist/release-0.3.1/mlspace_plugin-0.3.1-py3-none-any.whl dist/release-0.3.1/mlspace_plugin-0.3.1.tar.gz
+uv publish --trusted-publishing never dist/release-0.3.2/mlspace_plugin-0.3.2-py3-none-any.whl dist/release-0.3.2/mlspace_plugin-0.3.2.tar.gz
 ```
 
 6. Проверьте версию и SHA256 обоих файлов через PyPI JSON API; проверьте установку
-   `uvx --from mlspace-plugin==0.3.1 mlspace-plugin --version` из нового кеша.
+   `uvx --from mlspace-plugin==0.3.2 mlspace-plugin --version` из нового кеша.
 7. Только после проверки точной версии в PyPI обновите рабочую ветку GitHub
    marketplace и создайте тег релиза. До этого проверяйте изменения на отдельной
    release-ветке или локальном Git marketplace: main не должен ссылаться на

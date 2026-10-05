@@ -21,7 +21,7 @@ mlspace-plugin setup
 ```
 
 Если пакет уже установлен: `uv tool install --force .`.
-При установке из wheel: `uv tool install /путь/к/mlspace_plugin-0.3.1-py3-none-any.whl`.
+При установке из wheel: `uv tool install /путь/к/mlspace_plugin-0.3.2-py3-none-any.whl`.
 Не используйте editable-установку из `/tmp` для постоянной работы.
 Далее команды показаны для PyPI. После установки исходников или wheel через
 `uv tool install` заменяйте `uvx mlspace-plugin@latest` на `mlspace-plugin`,

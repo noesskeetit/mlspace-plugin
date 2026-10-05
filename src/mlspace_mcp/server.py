@@ -14,6 +14,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
+from . import USER_AGENT
 from .auth import TokenManager
 from .config import Settings
 from .overview import register_overviews
@@ -149,7 +150,10 @@ def build_server(settings: Settings) -> FastMCP:
 
     @asynccontextmanager
     async def lifespan(_server: FastMCP):
-        async with httpx.AsyncClient(timeout=settings.timeout, verify=tls_context(settings.ca_file)) as http:
+        async with httpx.AsyncClient(
+            timeout=settings.timeout, verify=tls_context(settings.ca_file),
+            headers={"User-Agent": USER_AGENT},
+        ) as http:
             tokens = TokenManager(
                 http,
                 settings.base_url,

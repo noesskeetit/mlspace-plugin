@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from . import USER_AGENT
 from .client_setup import (
     CLIENTS,
     atomic_write,
@@ -65,7 +66,9 @@ def _fetch_workspaces(key_id: str, key_secret: str, *, base_url: str,
     from .client import MLSpaceClient
 
     async def fetch() -> Any:
-        async with httpx.AsyncClient(timeout=30, verify=tls_context(ca_file)) as http:
+        async with httpx.AsyncClient(
+            timeout=30, verify=tls_context(ca_file), headers={"User-Agent": USER_AGENT},
+        ) as http:
             tokens = TokenManager(http, base_url=base_url, client_id=key_id, client_secret=key_secret)
             client = MLSpaceClient(http, tokens, base_url=base_url, api_key='', workspace_id='')
             return await client.request('GET', '/public/v2/workspaces/v3/')
@@ -148,7 +151,10 @@ def _verify(values: dict[str, str], *, base_url: str) -> str | None:
                 workspaces=json.loads(values.get("WORKSPACES", "[]")),
                 namespace="",
             )
-            async with httpx.AsyncClient(timeout=30, verify=tls_context(values.get("CA_FILE", ""))) as http:
+            async with httpx.AsyncClient(
+                timeout=30, verify=tls_context(values.get("CA_FILE", "")),
+                headers={"User-Agent": USER_AGENT},
+            ) as http:
                 tokens = TokenManager(
                     http, base_url=base_url, client_id=values["CLIENT_ID"],
                     client_secret=values["CLIENT_SECRET"],
