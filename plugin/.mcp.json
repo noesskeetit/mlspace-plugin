@@ -5,7 +5,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "mlspace-plugin==0.3.0",
+        "mlspace-plugin==0.3.1",
         "mlspace-plugin",
         "--transport",
         "stdio"
