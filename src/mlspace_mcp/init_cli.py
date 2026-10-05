@@ -33,6 +33,7 @@ from .config import (
     read_dotenv_file,
     user_config_file,
 )
+from .setup_conflicts import Resolutions, choose_resolutions
 from .setup_ui import choose_workspaces, display, masked_prompt
 from .setup_verification import verify_client
 from .tls import safe_error as _safe_error
@@ -251,7 +252,7 @@ def run_init(path: Path | None = None, *, force: bool = False, verify: bool = Tr
     except (ValueError, OSError, httpx.HTTPError) as exc:
         # Only our own ValueErrors carry displayable text. Third-party errors may echo keys.
         message = str(exc) if type(exc) is ValueError else _safe_error(exc)
-        print('Setup failed: ' + display(message), file=sys.stderr)
+        print('Setup failed: ' + '\n'.join(display(line) for line in message.splitlines()), file=sys.stderr)
         return 1
 
 
@@ -284,8 +285,10 @@ def _run_init(path: Path | None, **options: Any) -> int:
     selected_clients = {} if options['config_only'] or listing else _clients(
         options['clients'], options['client_paths'], non_interactive)
     command = server_command() if selected_clients and 'opencode' in selected_clients | managed_clients(selected_clients) else []
+    resolutions: Resolutions = {}
     if selected_clients:
-        plan = prepare_clients(selected_clients, target, command)
+        plan = prepare_clients(selected_clients, target, command, collect_conflicts=True)
+        resolutions = choose_resolutions(plan.get('conflicts', []), non_interactive=non_interactive)
         print('MCP and skills will be kept together for: ' +
               ', '.join(row[0] for row in plan['registrations']), file=sys.stderr)
     if not listing:
@@ -385,11 +388,11 @@ def _run_init(path: Path | None, **options: Any) -> int:
     if selected_clients:
         print('[4/4] Connecting MCP and installing skills…', file=sys.stderr)
         try:
-            install_clients(selected_clients, target, command)
+            install_clients(selected_clients, target, command, resolutions=resolutions)
             for client, executable, *_ in plan['registrations']:
                 print(f'  {client}: installed; checking skills and MCP process…', file=sys.stderr)
                 verify_client(client, executable, target, command)
-                print(f'  {client}: skills and MCP process verified.', file=sys.stderr)
+                print(f'  {client}: packaged skills checked (kept user overrides excluded); MCP process verified.', file=sys.stderr)
         except (OSError, ValueError) as exc:
             reason = str(exc) if type(exc) is ValueError else _safe_error(exc)
             raise ValueError('Credentials saved; client setup is incomplete. ' + reason) from exc

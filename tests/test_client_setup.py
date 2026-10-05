@@ -239,7 +239,7 @@ def test_modified_previously_connected_client_blocks_shared_update(tmp_path, mon
     client_setup.install_clients({'opencode': '/usr/bin/true'}, tmp_path / '.env', ['runtime-v1'])
     config = tmp_path / '.config/opencode/opencode.json'
     config.write_text(config.read_text().replace('runtime-v1', 'user-edited'))
-    with pytest.raises(ValueError, match='was not overwritten'):
+    with pytest.raises(ValueError, match='nothing was overwritten'):
         client_setup.prepare_clients({'codex': '/usr/bin/true'}, tmp_path / '.env', ['runtime-v2'])
 
 

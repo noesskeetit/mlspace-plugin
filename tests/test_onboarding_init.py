@@ -10,6 +10,62 @@ from mlspace_mcp.init_cli import run_init
 BASE = 'https://setup.example'
 
 
+def conflicting_opencode(tmp_path, monkeypatch):
+    import sys
+
+    from mlspace_mcp import init_cli
+    monkeypatch.setattr(sys.stdin, 'isatty', lambda: True)
+    monkeypatch.setattr(init_cli, 'detect_clients', lambda: {'opencode': '/usr/bin/true'})
+    monkeypatch.setattr(init_cli, 'server_command', lambda: [sys.executable, '-m', 'mlspace_mcp', '--transport', 'stdio'])
+    root = tmp_path / '.config/opencode'
+    skill = root / 'skills/mlspace-list-running-jobs/SKILL.md'
+    skill.parent.mkdir(parents=True)
+    skill.write_text('custom workflow')
+    config = root / 'opencode.jsonc'
+    config.write_text('{"mcp":{"mlspace":{"command":["old-wrapper"]}}}')
+    return skill, config
+
+
+@respx.mock
+def test_interactive_setup_resolves_wrapper_and_keeps_custom_skill(tmp_path, monkeypatch, capsys):
+    routes()
+    skill, config = conflicting_opencode(tmp_path, monkeypatch)
+    answers = iter(['r', 'k'])
+    monkeypatch.setattr('builtins.input', lambda *a: next(answers))
+    target = tmp_path / 'new.env'
+    assert run_init(target, base_url=BASE, from_env=True, clients=['opencode'], workspace_ids=['ws2']) == 0
+    assert skill.read_text() == 'custom workflow'
+    assert 'old-wrapper' not in config.read_text()
+    assert read_dotenv_file(target)['MLSPACE_WORKSPACE_ID'] == 'ws2'
+    output = capsys.readouterr().err
+    assert str(config) in output and str(skill) in output
+    assert output.index(str(skill)) < output.index('[1/4]')
+    assert 'not verified against release' in output
+
+
+def test_cancel_conflicts_preserves_configuration_and_credentials(tmp_path, monkeypatch, capsys):
+    skill, config = conflicting_opencode(tmp_path, monkeypatch)
+    before = config.read_bytes()
+    monkeypatch.setattr('builtins.input', lambda *a: '')
+    target = tmp_path / 'new.env'
+    assert run_init(target, base_url=BASE, from_env=True, clients=['opencode'], workspace_ids=['ws2']) == 1
+    assert not target.exists()
+    assert config.read_bytes() == before and skill.read_text() == 'custom workflow'
+    assert 'cancelled' in capsys.readouterr().err.lower()
+
+
+def test_noninteractive_conflicts_list_all_paths_without_prompt_even_with_force(tmp_path, monkeypatch, capsys):
+    skill, config = conflicting_opencode(tmp_path, monkeypatch)
+    monkeypatch.setattr('builtins.input', lambda *a: pytest.fail('unexpected prompt'))
+    target = tmp_path / 'existing.env'
+    target.write_text('MLSPACE_CLIENT_SECRET=old-secret\n')
+    assert run_init(target, base_url=BASE, from_env=True, clients=['opencode'], workspace_ids=['ws2'],
+                    non_interactive=True, force=True) == 1
+    output = capsys.readouterr().err
+    assert str(skill) in output and str(config) in output
+    assert target.read_text() == 'MLSPACE_CLIENT_SECRET=old-secret\n'
+
+
 @pytest.fixture(autouse=True)
 def isolate(monkeypatch, tmp_path):
     import os
@@ -163,7 +219,7 @@ def test_client_install_failure_keeps_verified_credentials_for_retry(tmp_path, m
     target.write_text(original)
     monkeypatch.setattr('mlspace_mcp.init_cli._clients', lambda *a: {'opencode': '/bin/true'})
     monkeypatch.setattr('mlspace_mcp.init_cli.server_command', lambda: ['/bin/echo'])
-    monkeypatch.setattr('mlspace_mcp.init_cli.prepare_clients', lambda *a: {'registrations': [('opencode',)]})
+    monkeypatch.setattr('mlspace_mcp.init_cli.prepare_clients', lambda *a, **kw: {'registrations': [('opencode',)]})
     def fail(*a, **kw):
         raise ValueError('Client installation failed')
     monkeypatch.setattr('mlspace_mcp.init_cli.install_clients', fail)

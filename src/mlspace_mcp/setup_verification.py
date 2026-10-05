@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -13,10 +14,11 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from . import __version__
-from .client_setup import _config, _read_config, _skill_sources
+from .client_setup import _config, _read_config, _skill_sources, install_state_file
 from .config import Settings, read_dotenv_file
 from .native_plugins import inspect_native
 from .server import build_server
+from .setup_ui import display
 from .workspace_context import environment_id, normalized_endpoint, selected_workspaces
 
 
@@ -73,11 +75,15 @@ def verify_runtime(command: list[str], credentials: Path, *, direct: bool = Fals
 
 def verify_client(client: str, executable: str, credentials: Path, command: list[str]) -> None:
     sources = _skill_sources()
+    overrides: set[str] = set()
     if client == 'opencode':
         config = _read_config(_config(client)).get('mcp', {}).get('mlspace', {})
         if config.get('command') != command or config.get('enabled') is not True:
             raise ValueError('opencode: installed MCP configuration differs; retry setup.')
         root = Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'opencode/skills'
+        state_path = install_state_file()
+        if state_path.exists():
+            overrides = set(json.loads(state_path.read_text()).get('skill_overrides', []))
         cwd = None
     else:
         status = inspect_native(client, executable)
@@ -89,7 +95,12 @@ def verify_client(client: str, executable: str, credentials: Path, command: list
         command = ['uvx', '--from', f'mlspace-plugin=={__version__}', 'mlspace-plugin', '--transport', 'stdio']
         if config != {'type': 'stdio', 'command': command[0], 'args': command[1:]}:
             raise ValueError(f'{client}: installed runtime command differs from this release.')
-    installed = {p.parent.name: p.read_text() for p in root.glob('mlspace-*/SKILL.md')}
-    if installed != sources:
-        raise ValueError(f'{client}: installed skills differ from this release; retry setup.')
+    for name, content in sources.items():
+        path = root / name / 'SKILL.md'
+        if not path.is_file():
+            raise ValueError(f'{client}: installed skills missing: {path}; retry setup.')
+        if client == 'opencode' and str(path) in overrides:
+            print(f'  User skill preserved (not verified against release): {display(str(path))}', file=sys.stderr)
+        elif path.read_text() != content:
+            raise ValueError(f'{client}: installed skills differ from this release: {path}; retry setup.')
     verify_runtime(command, credentials, direct=client == 'opencode', cwd=cwd)

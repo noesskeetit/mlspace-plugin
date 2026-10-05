@@ -115,7 +115,8 @@ def test_human_terminal_then_agent_search_after_source_ca_removed(setup_environm
         assert process.wait(timeout=3) == 0, transcript.decode(errors='replace')[-2000:]
         assert b'dummy-secret' not in transcript and b'dummy-id' not in transcript
         assert sent == 4 and b'***' in transcript
-        assert b'opencode: skills and MCP process verified' in transcript
+        assert b'opencode: packaged skills checked' in transcript
+        assert b'MCP process verified' in transcript
     finally:
         if process.poll() is None:
             process.kill()

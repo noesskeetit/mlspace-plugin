@@ -18,6 +18,7 @@ from .config import credential_pointer_file
 from .jsonc import loads as load_jsonc
 from .jsonc import set_member as set_jsonc_member
 from .native_plugins import inspect_native, install_native
+from .setup_conflicts import Conflict, Resolutions, backup_replacements, conflict_message
 
 CLIENTS = {'claude-code': 'claude', 'codex': 'codex', 'opencode': 'opencode'}
 
@@ -142,13 +143,36 @@ def managed_clients(overrides: dict[str, str] | None = None) -> dict[str, str]:
     return result
 
 
-def prepare_clients(clients: dict[str, str], env_file: Path, command: list[str]) -> dict[str, Any]:
+def prepare_clients(clients: dict[str, str], env_file: Path, command: list[str], *,
+                    collect_conflicts: bool = False, resolutions: Resolutions | None = None) -> dict[str, Any]:
     """Check client capabilities and conflicts before setup saves credentials."""
     state_path = install_state_file()
     state = json.loads(state_path.read_text()) if state_path.exists() else {}
     clients = managed_clients(clients) | clients
     sources = _skill_sources()
     writes: dict[Path, str] = {}
+    conflicts: list[Conflict] = []
+    replacements: list[Conflict] = []
+    overrides = set(state.get('skill_overrides', []))
+    decisions = resolutions or {}
+    examined: set[str] = set()
+
+    def resolve(path: Path, kind: str) -> str:
+        item = Conflict.inspect(path, kind)
+        decision = decisions.get(str(path))
+        if decision is None:
+            conflicts.append(item)
+            return ''
+        action, approved = decision
+        examined.add(str(path))
+        if item.fingerprint != approved:
+            raise ValueError(f'File changed after your choice; run setup again: {path}')
+        if action == 'replace':
+            replacements.append(item)
+        elif action != 'keep' or kind != 'skill':
+            raise ValueError(f'Invalid conflict choice for {path}')
+        return action
+
     registrations: list[tuple[str, str, Path, dict[str, Any] | None, Any]] = []
     for client, executable in clients.items():
         if client not in CLIENTS:
@@ -179,27 +203,47 @@ def prepare_clients(clients: dict[str, str], env_file: Path, command: list[str])
             comparable = dict(current)
             comparable.pop('type', None) if client != 'opencode' else None
             if comparable != entry and _hash(json.dumps(current, sort_keys=True)) != previous:
-                raise ValueError(f'Existing mlspace entry differs in {config}; it was not overwritten.')
+                resolve(config, 'connection')
         registrations.append((client, executable, config, entry, current))
         skills_root = Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'opencode/skills'
         for name, content in sources.items():
             target = skills_root / name / 'SKILL.md'
+            # A kept override belongs to the user, including their subsequent edits.
+            if str(target) in overrides and target.is_file():
+                state.get('skills', {}).pop(str(target), None)
+                continue
+            overrides.discard(str(target))
             if target.is_symlink() or target.parent.is_symlink():
                 if target.is_file() and target.read_text() == content:
                     continue
                 raise ValueError(f'Existing skill symlink differs: {target}')
             if target.exists() and target.read_text() != content:
                 if state.get('skills', {}).get(str(target)) != _hash(target.read_text()):
-                    raise ValueError(f'Existing skill has local changes: {target}')
+                    if resolve(target, 'skill') == 'keep':
+                        overrides.add(str(target))
+                        state.get('skills', {}).pop(str(target), None)
+                        continue
             writes[target] = content
+    if set(decisions) != examined:
+        raise ValueError('Conflicting files changed after your choice; run setup again.')
+    if conflicts and not collect_conflicts:
+        raise ValueError(conflict_message(conflicts))
+    state['skill_overrides'] = sorted(overrides)
     return {'state_path': state_path, 'state': state, 'writes': writes,
-            'registrations': registrations}
+            'registrations': registrations, 'conflicts': conflicts, 'replacements': replacements}
 
 
-def install_clients(clients: dict[str, str], env_file: Path, command: list[str]) -> list[str]:
+def install_clients(clients: dict[str, str], env_file: Path, command: list[str], *,
+                    resolutions: Resolutions | None = None) -> list[str]:
     # Revalidate after human input: files may have changed since the preflight.
-    plan = prepare_clients(clients, env_file, command)
+    plan = prepare_clients(clients, env_file, command, resolutions=resolutions)
     state, state_path = plan['state'], plan['state_path']
+    try:
+        backup_replacements(plan['replacements'], state_path.parent / 'backups')
+    except OSError as exc:
+        raise ValueError(f'Could not back up conflicting files in {state_path.parent / "backups"}. '
+                         'Originals were not replaced. Check permissions and free space, then retry setup.') from exc
+    replacements = {item.path: item for item in plan['replacements']}
     retry = ['uvx', 'mlspace-plugin@latest', 'setup', '--force']
     for client, executable, *_ in plan['registrations']:
         retry.extend(['--client-path', f'{client}={executable}'])
@@ -211,6 +255,8 @@ def install_clients(clients: dict[str, str], env_file: Path, command: list[str])
                 text = config.read_text() if config.exists() else '{}\n'
                 updated = set_jsonc_member(text, ['mcp', 'mlspace'], entry)
                 if updated != text:
+                    if config in replacements:
+                        replacements[config].verify_unchanged()
                     atomic_write(config, updated)
                 saved = _read_config(config).get('mcp', {}).get('mlspace')
                 if saved != entry:
@@ -236,11 +282,14 @@ def install_clients(clients: dict[str, str], env_file: Path, command: list[str])
     try:
         for target, content in plan['writes'].items():
             if not target.exists() or target.read_text() != content:
+                if target in replacements:
+                    replacements[target].verify_unchanged()
                 atomic_write(target, content, 0o644)
             state.setdefault('skills', {})[str(target)] = _hash(content)
             atomic_write(state_path, json.dumps(state, indent=2))
     except (OSError, ValueError) as exc:
+        reason = str(exc) if type(exc) is ValueError else 'Check permissions in the skills directory.'
         raise ValueError(f'MCP registered: {", ".join(installed)}. Skill installation incomplete; '
-                         'check permissions in the skills directory and rerun setup --force. '
+                         f'{reason} Rerun setup --force. '
                          'Verified credentials remain saved.') from exc
     return installed
