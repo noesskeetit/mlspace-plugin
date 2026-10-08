@@ -42,7 +42,7 @@ def test_assignments_and_blank_values_are_reasked_without_echo(monkeypatch, caps
     monkeypatch.setattr('mlspace_mcp.init_cli.masked_prompt', lambda _: next(values))
     assert _ask('Secret') == '  value=$foo  '
     output = capsys.readouterr().err
-    assert 'only the value' in output
+    assert 'только значение' in output
     assert 'pasted-secret' not in output and 'pasted-id' not in output
 
 
@@ -64,7 +64,7 @@ def test_verify_checks_only_selected_workspaces_with_their_own_headers(capsys):
     ])}
     assert _verify(values, base_url=BASE_URL) is None
     assert seen == [("ws-demo", "ws-demo", "key-demo"), ("ws-v100", "ws-v100", "key-v100")]
-    assert "2/2 selected workspace(s) verified" in capsys.readouterr().err
+    assert "Проверено выбранных воркспейсов: 2/2" in capsys.readouterr().err
     assert not any(call.request.url.path.endswith("/v3/") for call in respx.calls)
 
 
@@ -87,4 +87,4 @@ def test_verify_reports_partial_coverage_and_continues_after_failure(capsys, bad
     assert "csecret-1" not in problem
     assert "key-demo" not in problem
     assert healthy.called
-    assert "1/2 selected workspace(s) verified" in capsys.readouterr().err
+    assert "Проверено выбранных воркспейсов: 1/2" in capsys.readouterr().err

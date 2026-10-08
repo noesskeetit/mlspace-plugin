@@ -100,8 +100,8 @@ def test_real_opencode_loads_mcp_and_user_skills_after_setup_and_retry(
                '--base-url', endpoint, '--ca-file', str(pem), '--workspace', 'workspace-001',
                '--workspace', 'workspace-299']
     code, output = terminal(home, command, [
-        (b'[r] Back up config', b'r\r'),
-        (b'[k] Keep my skill', choice.encode() + b'\r'),
+        ('[r] Создать резервную копию конфига'.encode(), b'r\r'),
+        ('[k] Сохранить мой skill'.encode(), choice.encode() + b'\r'),
         (b'Cloud.ru Key ID:', b'dummy-id\r'),
         (b'Cloud.ru Key Secret:', b'dummy-secret\r'),
     ])
@@ -143,8 +143,8 @@ def test_real_terminal_cancel_and_agent_noninteractive_preserve_legacy_files(set
     config, edited, extra = prepare_legacy(home)
     before = {p: p.read_bytes() for p in [config, edited, extra]}
     command = [sys.executable, '-m', 'mlspace_mcp', 'setup', '--client-path', f'opencode={opencode}']
-    code, output = terminal(home, command, [(b'[r] Back up config', b'\r')])
-    assert code == 1 and 'cancelled' in output.lower()
+    code, output = terminal(home, command, [('[r] Создать резервную копию конфига'.encode(), b'\r')])
+    assert code == 1 and 'отменена' in output.lower()
     assert 'Cloud.ru Key ID:' not in output
     result = subprocess.run(command + ['--non-interactive', '--force'], cwd=home,
                             capture_output=True, text=True, timeout=15)

@@ -128,8 +128,11 @@ class Settings(BaseSettings):
     # Write actions are available by default; the server is a working tool, not a
     # viewer. What still stands between an agent and an irreversible change is the
     # `confirm=true` gate on the 16 destructive actions, the jobs-delete existence
-    # precheck, and the preflight refusals — see registry.py.
+    # precheck, the rotation opt-in below, and preflight refusals — see registry.py.
     readonly: bool = False
+    # Account-wide credential rotation needs a server-side opt-in, not just an
+    # agent-supplied confirm flag. Never enable this automatically during setup.
+    allow_registry_password_rotation: bool = False
     # dry-run: write/side-effecting actions are fully validated (body lint, path
     # resolve, confirm gate) but NOT sent — the tool returns a preview of the request
     # that WOULD be issued. Lets an LLM safely assemble & check a write before it runs.

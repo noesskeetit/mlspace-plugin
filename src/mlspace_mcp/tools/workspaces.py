@@ -22,7 +22,10 @@ ACTIONS: dict[str, Op] = {
         "GET", "/public/v2/workspaces/v1/x_api_key",
         query_params={"workspace_id": "workspace_id"},
         required=("workspace_id",),
-        help="Get the workspace X-API-KEY (secret, redacted in output).",
+        reveal_result_keys=("x-api-key",),
+        help="Get the workspace X-API-KEY (masked by default). Only for an authorized "
+             "credential task, use reveal_secret=true with confirm=true to receive "
+             "the value. Ordinary MCP operations resolve their credentials automatically.",
     ),
     "status": Op(
         "GET", "/public/v2/workspaces/v1/{workspace_id}/status",
@@ -74,7 +77,8 @@ PARAMS: list[Param] = [
         str,
         "Workspace UUID (path/query param for get_api_key/status/get/"
         "allocations/allocation_queues). Distinct from the x-workspace-id header. "
-        "Optional: defaults to the server's configured workspace if omitted; pass only to target another.",
+        "Optional API parameter: auto-filled from the selected target when omitted. "
+        "Use target to select the connected workspace.",
     ),
     Param("allocation_id", str, "Allocation UUID (allocation_queues only)."),
     Param("customer_id", str, "Filter workspaces by customer (list only)."),

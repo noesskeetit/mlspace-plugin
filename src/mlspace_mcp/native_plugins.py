@@ -27,8 +27,8 @@ def _run(client: str, executable: str, args: list[str], *, json_output: bool = F
         try:
             Path(home).expanduser().mkdir(parents=True, exist_ok=True, mode=0o700)
         except OSError as exc:
-            raise ValueError(f'codex: cannot create CODEX_HOME at {home}. '
-                             'Check that it is a writable directory and retry setup.') from exc
+            raise ValueError(f'codex: не удалось создать каталог CODEX_HOME: {home}. '
+                             'Проверьте, что путь указывает на каталог с правом записи, затем повторите setup.') from exc
     try:
         result = subprocess.run(
             [executable, *args], check=True, capture_output=True, text=True, timeout=180,
@@ -36,15 +36,15 @@ def _run(client: str, executable: str, args: list[str], *, json_output: bool = F
         )
         return json.loads(result.stdout) if json_output else None
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
-        raise ValueError(f'{client}: plugin command failed or returned an unsupported response. '
-                         'Check network access and update the client, then retry setup. '
-                         'Client output suppressed because it can contain secrets.') from exc
+        raise ValueError(f'{client}: команда управления плагином завершилась ошибкой или вернула неподдерживаемый ответ. '
+                         'Проверьте доступ к сети и обновите клиент, затем повторите setup. '
+                         'Вывод клиента скрыт, поскольку может содержать секреты.') from exc
 
 
 def inspect_native(client: str, executable: str) -> NativePluginStatus:
     """Read state before changing anything; never adopt another marketplace."""
     if client not in ('claude-code', 'codex'):
-        raise ValueError('Not a native plugin client: ' + client)
+        raise ValueError('Клиент не поддерживает этот способ установки нативного плагина: ' + client)
     markets = _run(client, executable, ['plugin', 'marketplace', 'list', '--json'], json_output=True)
     plugins = _run(client, executable, ['plugin', 'list', '--json'], json_output=True)
     try:
@@ -64,19 +64,19 @@ def inspect_native(client: str, executable: str) -> NativePluginStatus:
                 kind = market['marketplaceSource']['sourceType']
                 source = market['marketplaceSource']['source']
             if kind != 'git' or source != MARKETPLACE_SOURCE:
-                raise ValueError(f'{client}: marketplace mlspace has a different source; '
-                                 'remove or rename that marketplace before setup.')
+                raise ValueError(f'{client}: у marketplace mlspace другой источник; '
+                                 'перед setup удалите или переименуйте этот marketplace в клиенте.')
         id_key = 'id' if client == 'claude-code' else 'pluginId'
         selected = [row for row in plugins if row[id_key] == PLUGIN_ID]
         if any('mlspace' in row[id_key].lower() and row[id_key] != PLUGIN_ID for row in plugins):
-            raise ValueError(f'{client}: another MLSpace plugin is installed; resolve it before setup.')
+            raise ValueError(f'{client}: уже установлен другой плагин MLSpace. Разрешите конфликт в клиенте перед setup.')
         if not selected:
             return NativePluginStatus(client, marketplace_source=source)
         if len(selected) != 1 or (client == 'claude-code' and selected[0]['scope'] != 'user'):
-            raise ValueError(f'{client}: MLSpace is installed outside the user scope; resolve it before setup.')
+            raise ValueError(f'{client}: MLSpace установлен вне области user. Разрешите конфликт областей установки в клиенте перед setup.')
         row = selected[0]
         if source is None:
-            raise ValueError(f'{client}: installed MLSpace plugin has no verifiable marketplace source.')
+            raise ValueError(f'{client}: не удалось подтвердить источник marketplace установленного плагина MLSpace. Проверьте установку плагина в клиенте.')
         version, enabled = row['version'], row['enabled']
         if not isinstance(version, str) or not isinstance(enabled, bool):
             raise TypeError
@@ -90,13 +90,13 @@ def inspect_native(client: str, executable: str) -> NativePluginStatus:
             raise TypeError
         return NativePluginStatus(client, True, enabled, version, source, root)
     except (KeyError, TypeError, AttributeError) as exc:
-        raise ValueError(f'{client}: unsupported plugin state; update the client and retry setup.') from exc
+        raise ValueError(f'{client}: состояние плагина не поддерживается. Обновите клиент и повторите setup.') from exc
 
 
 def install_native(client: str, executable: str, expected_version: str) -> NativePluginStatus:
     status = inspect_native(client, executable)
     if status.installed and not status.enabled:
-        raise ValueError(f'{client}: MLSpace plugin is disabled. Enable {PLUGIN_ID} in the client and retry setup.')
+        raise ValueError(f'{client}: плагин MLSpace выключен. Включите {PLUGIN_ID} в клиенте и повторите setup.')
     if status.installed and status.version == expected_version:
         return status
     claude = client == 'claude-code'
@@ -111,6 +111,6 @@ def install_native(client: str, executable: str, expected_version: str) -> Nativ
                              *(['--scope', 'user'] if claude else []), '--json'])
     result = inspect_native(client, executable)
     if not result.installed or not result.enabled or result.version != expected_version:
-        raise ValueError(f'{client}: expected MLSpace {expected_version} was not confirmed. '
-                         'Retry with uvx mlspace-plugin@latest setup --force after the release is available.')
+        raise ValueError(f'{client}: не удалось подтвердить ожидаемую версию MLSpace {expected_version}. '
+                         'После появления релиза выполните uvx mlspace-plugin@latest setup --force.')
     return result

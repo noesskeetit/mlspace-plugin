@@ -28,52 +28,52 @@ def _configure_logging() -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="mlspace-plugin",
-        description="MCP server for the Cloud.ru MLSpace public API v2.",
+        description="MCP-сервер для публичного API v2 Cloud.ru MLSpace.",
     )
     parser.add_argument("--version", action="version", version=f"mlspace-plugin {__version__}")
     parser.add_argument(
         "--transport",
         choices=["streamable-http", "stdio"],
-        help="Override MLSPACE_TRANSPORT.",
+        help="Использовать этот транспорт вместо MLSPACE_TRANSPORT.",
     )
     parser.add_argument(
         "--list-tools",
         action="store_true",
-        help="Print the tools that would be registered, then exit (no credentials needed).",
+        help="Показать доступные инструменты и завершить работу (ключи не нужны).",
     )
     # Optional subcommand: with none given the CLI serves, as it always has.
     sub = parser.add_subparsers(dest="command")
     setup = sub.add_parser(
         "setup",
-        help="Set up access keys, workspaces, MCP clients and skills.",
+        help="Настроить ключи доступа, воркспейсы, MCP-клиенты и skills.",
         description=(
-            "Ask for Cloud.ru Key ID and Key Secret, discover MLSpace workspaces, and write them to "
-            f"{user_config_file()} with mode 600. Runs in your terminal: the values "
-            "are never sent to a model."
+            "Введите Cloud.ru Key ID и Cloud.ru Key Secret, выберите доступные воркспейсы MLSpace. Настройки сохраняются в "
+            f"{user_config_file()} с правами 0600 (доступ только вашему пользователю). Ввод выполняется в вашем терминале: ключи "
+            "не передаются модели. Оба поля скрыты звёздочками. Затем подключаются MCP и skills выбранных клиентов."
         ),
     )
-    setup.add_argument("--path", type=Path, help="Write somewhere else than the user config.")
-    setup.add_argument("--force", action="store_true", help="Overwrite an existing file.")
+    setup.add_argument("--path", type=Path, help="Сохранить ключи и воркспейсы в указанный файл вместо стандартного файла настроек.")
+    setup.add_argument("--force", action="store_true", help="Повторить настройку существующего файла с сохранёнными ключами. Конфликты пользовательских skills требуют отдельного выбора.")
     setup.add_argument(
         "--base-url",
-        help="MLSpace API endpoint to save (defaults to production or the existing target).",
+        help="Сохранить этот HTTPS-адрес API MLSpace; по умолчанию используется адрес из файла или production.",
     )
     setup.add_argument(
-        "--no-verify", action="store_true", help="Save unverified config offline; requires --config-only and --workspace."
+        "--no-verify", action="store_true", help="Сохранить настройки без проверки API; нужны --config-only и --workspace. Клиенты не подключаются."
     )
-    setup.add_argument("--client", dest="clients", action="append", choices=["claude-code", "codex", "opencode"], help="Connect this client (repeat for several); default: auto-detect.")
-    setup.add_argument("--client-path", dest="client_paths", action="append", metavar="CLIENT=PATH", help="Explicit client executable when not in PATH.")
-    setup.add_argument("--config-only", action="store_true", help="Only configure credentials/workspaces; do not register clients or skills.")
-    setup.add_argument("--non-interactive", action="store_true", help="Never prompt; require explicit workspace IDs and credential source or saved keys.")
-    setup.add_argument("--from-env", action="store_true", help="Use MLSPACE_CLIENT_ID / MLSPACE_CLIENT_SECRET from the environment.")
-    setup.add_argument("--credentials-file", type=Path, help="Import keys from an existing dotenv file without printing them.")
-    setup.add_argument("--replace-credentials", action="store_true", help="Ask for new keys instead of reusing saved keys.")
-    setup.add_argument("--workspace", dest="workspace_ids", action="append", help="Exact workspace ID to select (repeat for several).")
-    setup.add_argument("--ca-file", type=Path, help="Trusted corporate CA PEM; a copy is saved for subsequent MCP launches.")
-    setup.add_argument("--list-workspaces", action="store_true", help="Return a bounded JSON list without saving or installing anything.")
-    setup.add_argument("--search", default="", help="Filter workspace JSON by name, project or ID.")
-    setup.add_argument("--offset", type=int, default=0)
-    setup.add_argument("--limit", type=int, default=20, help="Workspace JSON page size (1–100).")
+    setup.add_argument("--client", dest="clients", action="append", choices=["claude-code", "codex", "opencode"], help="Подключить этот клиент; повторите флаг для нескольких. По умолчанию клиенты определяются автоматически.")
+    setup.add_argument("--client-path", dest="client_paths", action="append", metavar="CLIENT=PATH", help="Путь к исполняемому файлу клиента, если он отсутствует в PATH: например codex=/usr/local/bin/codex.")
+    setup.add_argument("--config-only", action="store_true", help="Сохранить только ключи и воркспейсы. Для подключения клиентов позже повторите setup --force --client CLIENT.")
+    setup.add_argument("--non-interactive", action="store_true", help="Без вопросов в терминале: укажите ID через --workspace и источник ключей либо используйте сохранённые ключи.")
+    setup.add_argument("--from-env", action="store_true", help="Прочитать ключи из переменных MLSPACE_CLIENT_ID / MLSPACE_CLIENT_SECRET.")
+    setup.add_argument("--credentials-file", type=Path, help="Прочитать ключи из существующего dotenv-файла без вывода их значений.")
+    setup.add_argument("--replace-credentials", action="store_true", help="Запросить новые ключи вместо сохранённых; для существующего файла также нужен --force.")
+    setup.add_argument("--workspace", dest="workspace_ids", action="append", help="Выбрать воркспейс по точному ID; повторите флаг для нескольких.")
+    setup.add_argument("--ca-file", type=Path, help="Файл доверенного CA в формате PEM от администратора. Копия сохраняется для следующих запусков MCP; проверка TLS включена.")
+    setup.add_argument("--list-workspaces", action="store_true", help="Вывести страницу доступных воркспейсов в JSON без сохранения и установки.")
+    setup.add_argument("--search", default="", help="Фильтровать JSON воркспейсов по названию, проекту или ID (с --list-workspaces).")
+    setup.add_argument("--offset", type=int, default=0, help="Пропустить это число результатов JSON; не меньше 0, по умолчанию 0.")
+    setup.add_argument("--limit", type=int, default=20, help="Число воркспейсов на странице JSON: 1–100, по умолчанию 20.")
     args = parser.parse_args(argv)
 
     if args.command == "setup":
@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         mcp = build_server(settings)
         tools = mcp._tool_manager.list_tools()
         mode = "read-only" if settings.readonly else "read-write"
-        print(f"mlspace-plugin {__version__} — {len(tools)} tools ({mode}):")
+        print(f"mlspace-plugin {__version__} — {len(tools)} инструментов ({mode}):")
         for tool in sorted(tools, key=lambda t: t.name):
             print(f"  {tool.name}")
         return 0
@@ -113,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
         mcp.run(transport="stdio")
     else:
         print(
-            f"mlspace-plugin serving streamable-HTTP on "
+            f"mlspace-plugin: сервер streamable-HTTP запущен на "
             f"http://{settings.host}:{settings.port}/mcp",
             file=sys.stderr,
         )

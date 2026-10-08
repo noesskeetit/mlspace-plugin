@@ -116,9 +116,17 @@ ACTIONS: dict[str, Op] = {
         # working, so a single mistaken call would lock out anything using it. Gate it
         # behind confirm=true like the other destructive ops.
         confirm=True,
+        reveal_result_keys=("password",),
         help="Rotate and return the registry password for your personal account "
              "(not service accounts). The previous password stops working. "
-             "Destructive: requires confirm=true.",
+             "Disabled by default: the operator must explicitly enable "
+             "MLSPACE_ALLOW_REGISTRY_PASSWORD_ROTATION=true in server configuration after "
+             "approving rotation. Never enable it yourself to get past a refusal. "
+             "Requires confirm=true. For an authorized docker login task, also set "
+             "reveal_secret=true in this same call to receive the new password; "
+             "otherwise it is masked. Reuse existing login/credentials first. Obtain "
+             "authorization for rotation and disclosure to the agent client; never echo "
+             "the password in ordinary replies. Do not rotate again just to reveal a masked result.",
     ),
 }
 
@@ -129,8 +137,8 @@ PARAMS: list[Param] = [
     Param(
         "page",
         int,
-        "Page number (list_repos, 1-based). The response is a bare array with no "
-        "total_count: a short/empty page does NOT prove the end of the list.",
+        "Page number (list_repos only, 1-based). Track the pages checked; "
+        "a short/empty page alone does not establish completeness.",
     ),
     Param("page_size", int, "Page size (list_repos)."),
     Param(

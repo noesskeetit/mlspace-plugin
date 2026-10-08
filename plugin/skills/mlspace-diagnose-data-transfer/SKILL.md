@@ -33,9 +33,27 @@ Goal: determine whether a data transfer truly failed / was partial, and why.
    (in_progress|success|failed|cancelled).
 4. If failed/cancelled, data_transfer get_event_logs (history_id, offset=0, limit=50,
    as_enum_resolved=true) for the decoded reason.
+   If events are empty, retain the failed/cancelled status and inspect the matching
+   history entry and existing connector logs. Do not call try_connector merely to
+   read logs: it can activate the connector. Treat a value such as not_found as an
+   observation, not proof of a missing SQL table; that cause needs supporting logs
+   or a separate authorized check. Never invent the reason for failure.
 5. Compare rows_count/size_bytes vs the user's expectation to judge "partial".
+   These are reported counters, not an audit of source/destination contents.
+   Even zero bytes/rows/progress does not prove the run never started, identify
+   its failure phase, or prove data was unchanged. Do not claim any of those
+   without independent evidence. Distinguish "this diagnostic made no changes"
+   from "the earlier transfer made no changes". A connector's saved success
+   status is not a fresh connection test and does not establish current health.
 Output: status + hard numbers (rows/bytes/progress) + completeness verdict + decoded
 event reasons; separate "genuinely failed" from "clean exit / fewer rows than expected".
+When failure logs are empty, conclude that the cause and data impact are unknown.
+Report the counters as observations; do not turn them into a narrative about which
+execution phase failed. Suggest the next read-only check instead of inventing a cause.
+If no evidence identifies a failure phase, do not list speculative phases as the
+diagnosis. Rerunning is a write that may change destination data: never include it
+in a list of read-only checks or propose it when the user asked for read-only diagnosis.
 Only if act=true: rerun_history (body={history_id}) for a failed run, after confirming.
-Caveat: status is only a 4-value enum; "finished but data looks wrong" is inferred from
-the numbers, not a dedicated field.
+For reasoning: status is only a 4-value enum; "finished but data looks wrong" is
+inferred from the numbers, not a dedicated field. In the answer, explain only the
+evidence and remaining uncertainty relevant to this run, not a general API audit.

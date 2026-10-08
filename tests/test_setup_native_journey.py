@@ -93,8 +93,8 @@ def test_human_terminal_then_agent_search_after_source_ca_removed(setup_environm
     transcript = b''
     steps = [(b'Cloud.ru Key ID:', b'dummy-id\r'),
              (b'Cloud.ru Key Secret:', b'\x1b[200~dummy-secret\x1b[201~\r'),
-             (b'Trusted CA PEM path', str(pem).encode() + b'\r'),
-             (b'Search name / project / ID:', b'workspace-299 \x15workspace-001 \r')]
+             ('Введите путь к этому файлу'.encode(), str(pem).encode() + b'\r'),
+             ('Поиск по названию / проекту / ID:'.encode(), b'workspace-299 \x15workspace-001 \r')]
     sent = 0
     try:
         deadline = time.monotonic() + 30
@@ -115,8 +115,8 @@ def test_human_terminal_then_agent_search_after_source_ca_removed(setup_environm
         assert process.wait(timeout=3) == 0, transcript.decode(errors='replace')[-2000:]
         assert b'dummy-secret' not in transcript and b'dummy-id' not in transcript
         assert sent == 4 and b'***' in transcript
-        assert b'opencode: packaged skills checked' in transcript
-        assert b'MCP process verified' in transcript
+        assert 'opencode: skills из релиза проверены'.encode() in transcript
+        assert 'запуск процесса MCP проверен'.encode() in transcript
     finally:
         if process.poll() is None:
             process.kill()

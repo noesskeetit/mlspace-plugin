@@ -94,7 +94,7 @@ def test_direct_entry_blocks_native_install(tmp_path, monkeypatch, client):
     config.parent.mkdir(parents=True, exist_ok=True)
     config.write_text('[mcp_servers.mlspace]\ncommand="old"\n' if client == 'codex' else
                       json.dumps({'mcpServers': {'mlspace': {'command': 'old'}}}))
-    with pytest.raises(ValueError, match='direct'):
+    with pytest.raises(ValueError, match='прямое'):
         prepare_clients({client: '/usr/bin/true'}, tmp_path / '.env', [])
 
 
@@ -173,7 +173,7 @@ def test_skill_write_failure_reports_partial_registration(tmp_path, monkeypatch)
             raise PermissionError('not writable')
         original(path, text, mode)
     monkeypatch.setattr(client_setup, 'atomic_write', fail_skill)
-    with pytest.raises(ValueError, match='MCP registered: opencode'):
+    with pytest.raises(ValueError, match='MCP подключён: opencode'):
         client_setup.install_clients({'opencode': '/usr/bin/true'}, tmp_path / '.env', ['/bin/echo'])
 
 
@@ -201,7 +201,7 @@ def test_local_wheel_in_uvx_cache_is_not_substituted_with_pypi(tmp_path, monkeyp
     (metadata / 'direct_url.json').write_text('{"url":"file:///private/local.whl"}')
     monkeypatch.setattr(client_setup, '__file__', str(source))
     monkeypatch.setattr('shutil.which', lambda name: '/opt/bin/uvx' if name == 'uvx' else None)
-    with pytest.raises(ValueError, match='local wheel'):
+    with pytest.raises(ValueError, match='локального wheel'):
         client_setup.server_command()
 
 
@@ -239,7 +239,7 @@ def test_modified_previously_connected_client_blocks_shared_update(tmp_path, mon
     client_setup.install_clients({'opencode': '/usr/bin/true'}, tmp_path / '.env', ['runtime-v1'])
     config = tmp_path / '.config/opencode/opencode.json'
     config.write_text(config.read_text().replace('runtime-v1', 'user-edited'))
-    with pytest.raises(ValueError, match='nothing was overwritten'):
+    with pytest.raises(ValueError, match='файлы ещё не перезаписаны'):
         client_setup.prepare_clients({'codex': '/usr/bin/true'}, tmp_path / '.env', ['runtime-v2'])
 
 
@@ -264,7 +264,7 @@ def test_missing_managed_native_cli_blocks_before_new_registration(tmp_path, mon
     client_setup.atomic_write(tmp_path / '.codex/config.toml', '[mcp_servers.mlspace]\ncommand="old"\n')
     client_setup.atomic_write(tmp_path / '.config/mlspace-plugin/install-state.json',
                               json.dumps({'clients': {'codex': {'mode': 'native'}}}))
-    with pytest.raises(ValueError, match='codex executable is unavailable'):
+    with pytest.raises(ValueError, match='codex.*недоступен'):
         client_setup.install_clients({'opencode': '/usr/bin/true'}, tmp_path / '.env', ['runtime-v2'])
     assert not (tmp_path / '.config/opencode/opencode.json').exists()
 
@@ -281,9 +281,9 @@ def test_partial_native_install_can_resume_without_duplicate(tmp_path, monkeypat
         return install(client, *args)
     monkeypatch.setattr(client_setup, 'install_native', fail_second)
     args = ({'claude-code': '/usr/bin/true', 'codex': '/usr/bin/true'}, tmp_path / '.env', [])
-    with pytest.raises(ValueError, match='Already registered: claude-code') as error:
+    with pytest.raises(ValueError, match='Уже подключены: claude-code') as error:
         client_setup.install_clients(*args)
-    assert 'Retry:' in str(error.value)
+    assert 'Повторите команду:' in str(error.value)
     assert '--client-path codex=/usr/bin/true' in str(error.value)
     state = json.loads((tmp_path / '.config/mlspace-plugin/install-state.json').read_text())
     assert list(state['clients']) == ['claude-code']

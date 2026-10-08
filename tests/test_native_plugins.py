@@ -68,7 +68,7 @@ def test_install_and_repeat_do_not_duplicate_native_plugin(cli):
 def test_foreign_marketplace_stops_before_any_write(cli):
     native, client, state, calls, _ = cli
     state['market'] = 'https://example.org/someone-else.git'
-    with pytest.raises(ValueError, match='source'):
+    with pytest.raises(ValueError, match='источник'):
         native.install_native(client, '/client', '1.2.3')
     assert all('list' in args for args in calls)
 

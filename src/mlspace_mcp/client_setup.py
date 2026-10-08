@@ -39,22 +39,22 @@ def server_command() -> list[str]:
     cached = any(re.fullmatch(r'archive-v\d+', part) for part in source.parts)
     if cached and 'site-packages' in source.parts and (uvx := shutil.which('uvx')):
         if any(source.parent.parent.glob('mlspace_plugin-*.dist-info/direct_url.json')):
-            raise ValueError('For a local wheel, use `uv tool install /path/to/package.whl` '
-                             'before setup, or use setup --config-only for a native plugin.')
+            raise ValueError('Для локального wheel сначала выполните `uv tool install /путь/к/package.whl` '
+                             'перед setup либо используйте setup --config-only для нативного плагина.')
         return [uvx, '--from', f'mlspace-plugin=={__version__}',
                 'mlspace-plugin', '--transport', 'stdio']
     executable = Path(sys.executable).parent / 'mlspace-plugin'
     if not executable.is_file():
-        raise ValueError('Install the package with `uv tool install .` before connecting clients.')
+        raise ValueError('Перед подключением клиентов установите пакет командой `uv tool install .`.')
     # An editable installation under /tmp disappears on reboot; reject that source.
     if source.is_relative_to(Path(tempfile.gettempdir()).resolve()) or str(source).startswith('/tmp/'):
-        raise ValueError('Temporary installation: install the wheel with `uv tool install` first.')
+        raise ValueError('Пакет установлен во временном каталоге. Сначала установите wheel через `uv tool install`.')
     return [str(executable.absolute()), '--transport', 'stdio']
 
 
 def atomic_write(path: Path, text: str, mode: int = 0o600) -> None:
     if path.is_symlink():
-        raise ValueError(f'Refusing to replace a symlink: {path}')
+        raise ValueError(f'Символическая ссылка не может быть заменена: {path}. Укажите обычный файл.')
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd, name = tempfile.mkstemp(prefix='.' + path.name, dir=path.parent)
     try:
@@ -76,7 +76,7 @@ def _skill_sources() -> dict[str, str]:
     result = {item.name: item.joinpath('SKILL.md').read_text(encoding='utf-8')
               for item in root.iterdir() if item.is_dir() and item.joinpath('SKILL.md').is_file()}
     if not result:
-        raise ValueError('No packaged skills found; reinstall the MLSpace wheel.')
+        raise ValueError('В пакете не найдены skills. Переустановите wheel MLSpace.')
     return result
 
 
@@ -96,7 +96,7 @@ def _config(client: str) -> Path:
     root = Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'opencode'
     jsonc, plain = root / 'opencode.jsonc', root / 'opencode.json'
     if jsonc.exists() and plain.exists():
-        raise ValueError('Both opencode.json and opencode.jsonc exist; select OPENCODE_CONFIG explicitly.')
+        raise ValueError('Найдены одновременно opencode.json и opencode.jsonc. Явно укажите нужный файл через OPENCODE_CONFIG.')
     return jsonc if jsonc.exists() else plain
 
 
@@ -128,15 +128,15 @@ def managed_clients(overrides: dict[str, str] | None = None) -> dict[str, str]:
         if previous_path.absolute() != config.absolute():
             variable = {'claude-code': 'CLAUDE_CONFIG_DIR', 'codex': 'CODEX_HOME',
                         'opencode': 'OPENCODE_CONFIG'}[client]
-            raise ValueError(f'Previously connected {client} uses {previous_path}. '
-                             f'Restore its {variable} setting before updating all MLSpace clients.')
+            raise ValueError(f'Ранее подключённый {client} использует {previous_path}. '
+                             f'Перед обновлением клиентов MLSpace восстановите прежнее значение {variable}.')
         candidates = [(overrides or {}).get(client), state.get('executables', {}).get(client),
                       detected.get(client)]
         executable = next((path for path in candidates if path and Path(path).is_file()
                            and os.access(path, os.X_OK)), None)
         if not executable and client != 'opencode':
-            raise ValueError(f'Previously connected {client} executable is unavailable. Restore it or use '
-                             f'--client-path {client}=/absolute/path before updating MLSpace.')
+            raise ValueError(f'Исполняемый файл ранее подключённого {client} недоступен. Восстановите его или укажите '
+                             f'--client-path {client}=/абсолютный/путь перед обновлением MLSpace.')
         if client != 'opencode' and not inspect_native(client, executable or CLIENTS[client]).installed:
             continue
         result[client] = executable or CLIENTS[client]  # OpenCode config is written directly.
@@ -166,32 +166,32 @@ def prepare_clients(clients: dict[str, str], env_file: Path, command: list[str],
         action, approved = decision
         examined.add(str(path))
         if item.fingerprint != approved:
-            raise ValueError(f'File changed after your choice; run setup again: {path}')
+            raise ValueError(f'Файл изменился после вашего выбора; запустите setup снова: {path}')
         if action == 'replace':
             replacements.append(item)
         elif action != 'keep' or kind != 'skill':
-            raise ValueError(f'Invalid conflict choice for {path}')
+            raise ValueError(f'Недопустимый выбор для конфликтующего файла {path}. Повторите setup и выберите один из предложенных вариантов.')
         return action
 
     registrations: list[tuple[str, str, Path, dict[str, Any] | None, Any]] = []
     for client, executable in clients.items():
         if client not in CLIENTS:
-            raise ValueError('Unknown client: ' + client)
+            raise ValueError('Неизвестный клиент: ' + client)
         config = _config(client)
         if config.is_symlink():
-            raise ValueError(f'Client config is a symlink; configure it manually: {config}')
+            raise ValueError(f'Конфигурация клиента является символической ссылкой; настройте её вручную: {config}')
         data = _read_config(config)
         key = {'claude-code': 'mcpServers', 'codex': 'mcp_servers', 'opencode': 'mcp'}[client]
         entries = data.get(key, {})
         if not isinstance(entries, dict):
-            raise ValueError(f'Invalid MCP configuration: {config}')
+            raise ValueError(f'Неверный формат конфигурации MCP: {config}. Проверьте файл и повторите setup.')
         for name, entry in entries.items():
             if name != 'mlspace' and ('mlspace' in name.lower() or 'mlspace-plugin' in json.dumps(entry)):
-                raise ValueError(f'Existing MLSpace integration {name} in {config}; migrate it first.')
+                raise ValueError(f'В {config} уже есть подключение MLSpace {name}. Сначала выполните миграцию этого подключения.')
         if client != 'opencode':
             if 'mlspace' in entries:
-                raise ValueError(f'Existing direct MLSpace connection in {config}; '
-                                 'remove it before installing the native plugin.')
+                raise ValueError(f'В {config} уже есть прямое подключение MLSpace; '
+                                 'перед установкой нативного плагина удалите это подключение.')
             inspect_native(client, executable)
             registrations.append((client, executable, config, None, None))
             continue
@@ -216,7 +216,7 @@ def prepare_clients(clients: dict[str, str], env_file: Path, command: list[str],
             if target.is_symlink() or target.parent.is_symlink():
                 if target.is_file() and target.read_text() == content:
                     continue
-                raise ValueError(f'Existing skill symlink differs: {target}')
+                raise ValueError(f'Существующий skill по символической ссылке отличается от версии плагина: {target}. Разрешите конфликт вручную и повторите setup.')
             if target.exists() and target.read_text() != content:
                 if state.get('skills', {}).get(str(target)) != _hash(target.read_text()):
                     if resolve(target, 'skill') == 'keep':
@@ -225,7 +225,7 @@ def prepare_clients(clients: dict[str, str], env_file: Path, command: list[str],
                         continue
             writes[target] = content
     if set(decisions) != examined:
-        raise ValueError('Conflicting files changed after your choice; run setup again.')
+        raise ValueError('Конфликтующие файлы изменились после вашего выбора; запустите setup снова.')
     if conflicts and not collect_conflicts:
         raise ValueError(conflict_message(conflicts))
     state['skill_overrides'] = sorted(overrides)
@@ -241,13 +241,13 @@ def install_clients(clients: dict[str, str], env_file: Path, command: list[str],
     try:
         backup_replacements(plan['replacements'], state_path.parent / 'backups')
     except OSError as exc:
-        raise ValueError(f'Could not back up conflicting files in {state_path.parent / "backups"}. '
-                         'Originals were not replaced. Check permissions and free space, then retry setup.') from exc
+        raise ValueError(f'Не удалось создать резервную копию конфликтующих файлов в {state_path.parent / "backups"}. '
+                         'Оригиналы не заменены. Проверьте права на запись и свободное место, затем повторите setup.') from exc
     replacements = {item.path: item for item in plan['replacements']}
     retry = ['uvx', 'mlspace-plugin@latest', 'setup', '--force']
     for client, executable, *_ in plan['registrations']:
         retry.extend(['--client-path', f'{client}={executable}'])
-    retry_hint = 'Retry: ' + shlex.join(retry)
+    retry_hint = 'Повторите команду: ' + shlex.join(retry)
     installed = []
     for client, executable, config, entry, _current in plan['registrations']:
         try:
@@ -260,7 +260,7 @@ def install_clients(clients: dict[str, str], env_file: Path, command: list[str],
                     atomic_write(config, updated)
                 saved = _read_config(config).get('mcp', {}).get('mlspace')
                 if saved != entry:
-                    raise ValueError(f'Client registration could not be confirmed for {client}; retry setup.')
+                    raise ValueError(f'Не удалось подтвердить подключение {client}; повторите setup --force.')
                 record: dict[str, Any] = {'mode': 'direct', 'version': __version__,
                           'entry_hash': _hash(json.dumps(saved, sort_keys=True))}
             else:
@@ -273,10 +273,10 @@ def install_clients(clients: dict[str, str], env_file: Path, command: list[str],
             atomic_write(state_path, json.dumps(state, indent=2))
             installed.append(client)
         except (ValueError, OSError) as exc:
-            raise ValueError(f'Could not register {client}. Already registered: '
-                             f'{", ".join(installed) or "none"}. {exc}\n{retry_hint}') from exc
+            raise ValueError(f'Не удалось подключить {client}. Уже подключены: '
+                             f'{", ".join(installed) or "нет"}. {exc}\n{retry_hint}') from exc
         except KeyboardInterrupt:
-            print(f'Client setup interrupted. Already registered: {", ".join(installed) or "none"}.\n'
+            print(f'Настройка клиентов прервана. Уже подключены: {", ".join(installed) or "нет"}.\n'
                   + retry_hint, file=sys.stderr)
             raise
     try:
@@ -288,8 +288,8 @@ def install_clients(clients: dict[str, str], env_file: Path, command: list[str],
             state.setdefault('skills', {})[str(target)] = _hash(content)
             atomic_write(state_path, json.dumps(state, indent=2))
     except (OSError, ValueError) as exc:
-        reason = str(exc) if type(exc) is ValueError else 'Check permissions in the skills directory.'
-        raise ValueError(f'MCP registered: {", ".join(installed)}. Skill installation incomplete; '
-                         f'{reason} Rerun setup --force. '
-                         'Verified credentials remain saved.') from exc
+        reason = str(exc) if type(exc) is ValueError else 'Проверьте права на запись в каталоге skills.'
+        raise ValueError(f'MCP подключён: {", ".join(installed)}. Установка skills не завершена; '
+                         f'{reason} Повторите setup --force. '
+                         'Проверенные ключи остаются сохранёнными.') from exc
     return installed

@@ -19,7 +19,8 @@ ACTIONS: dict[str, Op] = {
         # would hide data (breaks principle #1). Pagination stays strictly opt-in.
         query_params={"page": "page", "page_size": "page_size"},
         kind="list",
-        help="List all connectors (system, personal, public) in the workspace.",
+        help="List connectors visible in the workspace. Use page/page_size for bounded reads; "
+             "do not infer a complete inventory from one page.",
     ),
     "get_connector": Op(
         "GET", "/public/v2/data_transfer/v3/connectors/{connector_type}/{id_}",
@@ -32,7 +33,10 @@ ACTIONS: dict[str, Op] = {
         body_field="body",
         required=("body",),
         write=True,
-        help="Create a connector; `body` = ConnectorInputViewModelV3.",
+        help="Create a user connector; `body` = ConnectorInputViewModelV3. "
+             "The bundled creation schema lists postgresql, mssql, mysql, clickhouse, "
+             "oracledb, s3amazon, s3custom, s3google. Source discovery also includes "
+             "system types; it is not a list of types that can be created.",
     ),
     "update_connector": Op(
         "POST", "/public/v2/data_transfer/v3/connectors/{connector_type}/{id_}",
@@ -62,14 +66,17 @@ ACTIONS: dict[str, Op] = {
         path_params={"connector_type": "connector_type", "id_": "id_"},
         required=("connector_type", "id_"),
         write=True,
-        help="Trial-test a connector (connection check; activates the connector on success).",
+        help="Test connectivity and activate the connector on success (state-changing). "
+             "Do not use or recommend it as a read-only diagnostic step; inspect existing "
+             "connector details/logs first. Activation needs user authorization.",
     ),
     "get_connector_logs": Op(
         "GET", "/public/v2/data_transfer/v3/connectors/{connector_type}/{id_}/try/logs",
         path_params={"connector_type": "connector_type", "id_": "id_"},
         required=("connector_type", "id_"),
         kind="log",
-        help="Get connector activation (try) logs.",
+        help="Get existing connector activation logs. Empty logs do not prove that a "
+             "connector is missing or inactive; do not run try_connector just to read logs.",
     ),
     "delete_connectors": Op(
         "DELETE", "/public/v2/data_transfer/v2/connectors",
@@ -82,13 +89,15 @@ ACTIONS: dict[str, Op] = {
     "list_sources": Op(
         "GET", "/public/v2/data_transfer/v2/connectors/sources",
         kind="list",
-        help="List schemas of all connectors usable as a source.",
+        help="List source schemas, including system types. Use these to inspect parameters; "
+             "use the create_connector contract to determine user-creatable types.",
     ),
     # --- transfers (v4 reads, v5 writes, v2 delete) -----------------------
     "list_transfers": Op(
         "GET", "/public/v2/data_transfer/v4/transfer",
         kind="list",
-        help="List all transfers in the workspace.",
+        help="List transfers in the workspace. This action accepts no pagination parameters. "
+             "If output is shortened, use get_transfer for a known id; do not claim completeness.",
     ),
     "get_transfer": Op(
         "GET", "/public/v2/data_transfer/v4/transfer/{transfer_id}",
@@ -101,7 +110,10 @@ ACTIONS: dict[str, Op] = {
         body_field="body",
         required=("body",),
         write=True,
-        help="Create a transfer; `body` = TransferInputViewModelV5 (runs now unless crontab is set).",
+        help="Create a transfer; `body` = TransferInputViewModelV5. Runs now unless crontab "
+             "is set. crontab is a CronViewModel object, not a cron string. Verify schedule "
+             "semantics and read back the saved schedule before reporting it configured. "
+             "Use a verified cluster_name/route; do not invent cross-cluster route names.",
     ),
     "update_transfer": Op(
         "POST", "/public/v2/data_transfer/v5/transfer/{id_}",
@@ -109,7 +121,8 @@ ACTIONS: dict[str, Op] = {
         body_field="body",
         required=("id_", "body"),
         write=True,
-        help="Update a transfer by id; `body` = TransferInputViewModelV5.",
+        help="Update a transfer by id; `body` = TransferInputViewModelV5. For scheduling, "
+             "use a CronViewModel object and verify the saved schedule with get_transfer.",
     ),
     "fav_transfer": Op(
         "POST", "/public/v2/data_transfer/v4/transfer/{id_}/fav",
@@ -145,14 +158,17 @@ ACTIONS: dict[str, Op] = {
             "page_size": "page_size",
         },
         kind="list",
-        help="List transfer history (paginated; filter by transfer_id/source_name).",
+        help="List transfer history (paginated; filter by transfer_id/source_name). "
+             "Zero bytes/rows/progress are reported counters only: they do not prove "
+             "that data was unchanged or identify the failure phase.",
     ),
     "get_history_status": Op(
         "GET", "/public/v2/data_transfer/v3/history/status/stream",
         query_params={"ids": "ids"},
         required=("ids",),
         kind="list",
-        help="Get history entries by id (ids repeat).",
+        help="Get history entries by id (ids repeat). Status/counters alone do not "
+             "establish failure cause, execution phase or whether destination data changed.",
     ),
     "get_event_logs": Op(
         "GET", "/public/v2/data_transfer/v2/events/list",
@@ -167,7 +183,10 @@ ACTIONS: dict[str, Op] = {
         },
         required=("offset", "limit"),
         kind="list",
-        help="Get transfer event logs (needs offset+limit and either history_id or transfer_id).",
+        help="Get transfer event logs (needs offset+limit and either history_id or transfer_id). "
+             "If empty, cross-check run status and connector logs; do not infer success "
+             "or a specific cause from absent events. Rerunning changes state; never "
+             "recommend a rerun as a read-only diagnostic check.",
     ),
     "cancel_history": Op(
         "POST", "/public/v2/data_transfer/v2/history/cancel",
@@ -219,9 +238,9 @@ PARAMS: list[Param] = [
     Param(
         "page",
         int,
-        "Page number (list_history, list_connectors, 1-based). NOTE for list_connectors "
-        "the response is a bare array with no total_count, so a short/empty page does "
-        "NOT prove the end of the list; list_history instead returns {data, total_count}.",
+        "Page number (list_history, list_connectors only, 1-based). For list_connectors, "
+        "track the pages checked; a short/empty page alone does not establish completeness. "
+        "For list_history, use the returned total_count to track progress.",
     ),
     Param("page_size", int, "Page size (list_history, list_connectors)."),
     Param("offset", int, "Pagination offset (get_event_logs)."),
@@ -253,7 +272,8 @@ DOMAIN = DomainTool(
     title="MLSpace Data Transfer",
     summary=(
         "Manage MLSpace data-transfer connectors, transfers, and migration history "
-        "(create/update/try connectors, run/cancel/rerun transfers, inspect logs)."
+        "(create/update/try connectors, run/cancel/rerun transfers, inspect logs). "
+        "For failed-run diagnosis, use the mlspace-diagnose-data-transfer skill when available."
     ),
     actions=ACTIONS,
     params=PARAMS,

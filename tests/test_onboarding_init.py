@@ -40,7 +40,7 @@ def test_interactive_setup_resolves_wrapper_and_keeps_custom_skill(tmp_path, mon
     output = capsys.readouterr().err
     assert str(config) in output and str(skill) in output
     assert output.index(str(skill)) < output.index('[1/4]')
-    assert 'not verified against release' in output
+    assert 'соответствие релизу не проверяется' in output
 
 
 def test_cancel_conflicts_preserves_configuration_and_credentials(tmp_path, monkeypatch, capsys):
@@ -51,7 +51,7 @@ def test_cancel_conflicts_preserves_configuration_and_credentials(tmp_path, monk
     assert run_init(target, base_url=BASE, from_env=True, clients=['opencode'], workspace_ids=['ws2']) == 1
     assert not target.exists()
     assert config.read_bytes() == before and skill.read_text() == 'custom workflow'
-    assert 'cancelled' in capsys.readouterr().err.lower()
+    assert 'отменена' in capsys.readouterr().err.lower()
 
 
 def test_noninteractive_conflicts_list_all_paths_without_prompt_even_with_force(tmp_path, monkeypatch, capsys):
@@ -194,7 +194,7 @@ def test_no_tty_never_reads_or_echoes_piped_credentials(tmp_path, monkeypatch, c
     target = tmp_path / '.env'
     assert run_init(target, config_only=True) == 1
     assert not target.exists()
-    assert 'terminal' in capsys.readouterr().err
+    assert 'терминал' in capsys.readouterr().err
 
 
 @respx.mock
@@ -227,7 +227,7 @@ def test_client_install_failure_keeps_verified_credentials_for_retry(tmp_path, m
                     from_env=True, workspace_ids=['ws2']) == 1
     assert read_dotenv_file(target)["MLSPACE_CLIENT_SECRET"] == "secret-value"
     assert read_dotenv_file(target)["MLSPACE_READONLY"] == "true"
-    assert "Credentials saved; client setup is incomplete" in capsys.readouterr().err
+    assert "Ключи сохранены; настройка клиентов не завершена" in capsys.readouterr().err
 
 
 @respx.mock
@@ -281,7 +281,7 @@ def test_invalid_credentials_target_fails_before_client_setup(tmp_path, monkeypa
     monkeypatch.setattr('mlspace_mcp.init_cli._clients', lambda *a: calls.append('clients') or {})
     assert run_init(target, force=True, non_interactive=True, from_env=True) == 1
     assert calls == []
-    assert 'Credentials target' in capsys.readouterr().err
+    assert 'обычный файл' in capsys.readouterr().err
 
 
 @respx.mock
@@ -300,9 +300,9 @@ def test_save_failure_happens_before_connecting_clients(tmp_path, monkeypatch, c
     assert target.read_text() == original
     assert not (tmp_path / '.config/opencode/opencode.json').exists()
     error = capsys.readouterr().err
-    assert 'Could not save credentials' in error
+    assert 'Не удалось сохранить ключи' in error
     assert str(target) in error
-    assert 'No clients were connected' in error
+    assert 'Клиенты ещё не подключены' in error
     assert 'sensitive detail' not in error
 
 
@@ -335,7 +335,7 @@ def test_setup_handshake_failure_reports_saved_and_installed_but_not_ready(tmp_p
     assert run_init(tmp_path / '.env', base_url=BASE, non_interactive=True,
                     from_env=True, workspace_ids=['ws2']) == 1
     output = capsys.readouterr().err
-    assert 'Credentials saved' in output and 'opencode' in output
+    assert 'Ключи сохранены' in output and 'opencode' in output
     assert 'Done.' not in output
 
 
@@ -345,6 +345,6 @@ def test_deleted_connections_are_not_automatically_recreated(tmp_path, monkeypat
     install_clients({'opencode': '/bin/true'}, tmp_path / '.env', ['runtime-v1'])
     (tmp_path / '.config/opencode/opencode.json').write_text('{}')
     monkeypatch.setattr('mlspace_mcp.init_cli.detect_clients', lambda: {'opencode': '/bin/true'})
-    with pytest.raises(ValueError, match='Select a new connection explicitly'):
+    with pytest.raises(ValueError, match='Явно выберите новый клиент'):
         _clients([], [], True)
     assert _clients(['opencode'], [], True) == {'opencode': '/bin/true'}

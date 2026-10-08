@@ -62,7 +62,8 @@ async def test_destructive_action_without_confirm_sends_nothing(tool, action):
 
     dt = next(d for d in _domains() if d.name == tool)
     op = dt.actions[action]
-    settings = make_settings(readonly=False, api_key="")  # a key lookup would be HTTP
+    settings = make_settings(readonly=False, api_key="",
+                             allow_registry_password_rotation=True)  # a key lookup would be HTTP
     handler = registry._build_handler(dt, registry.available_actions(dt, False), settings)
     # namespace is left out on purpose: its lazy lookup is HTTP and must not
     # happen before the confirm refusal either

@@ -27,7 +27,7 @@ def fingerprint(path: Path) -> str:
         elif item.is_dir():
             value = 'directory'
         else:
-            raise ValueError(f'Unsupported or missing setup file: {item}')
+            raise ValueError(f'Файл настройки отсутствует или имеет неподдерживаемый тип: {item}. Проверьте путь и повторите setup.')
         rows.append((name, value))
     return hashlib.sha256(json.dumps(rows).encode()).hexdigest()
 
@@ -44,7 +44,7 @@ class Conflict:
 
     def verify_unchanged(self) -> None:
         if fingerprint(self.source) != self.fingerprint:
-            raise ValueError(f'File changed after your choice; run setup again: {self.path}')
+            raise ValueError(f'Файл изменился после вашего выбора; запустите setup снова: {self.path}')
 
     @classmethod
     def inspect(cls, path: Path, kind: str) -> Conflict:
@@ -53,10 +53,10 @@ class Conflict:
 
 
 def conflict_message(conflicts: list[Conflict]) -> str:
-    lines = ['Existing MLSpace files differ; nothing was overwritten:']
+    lines = ['Существующие файлы MLSpace отличаются от версии плагина; файлы ещё не перезаписаны:']
     lines.extend(f'  {item.kind}: {item.path}' for item in conflicts)
-    lines.append('Run setup in your terminal to keep custom skills or back up and replace conflicting files. '
-                 '--force does not approve replacing them.')
+    lines.append('Запустите setup в терминале и выберите для каждого файла: сохранить пользовательский skill либо создать резервную копию и заменить его версией плагина. '
+                 'Флаг --force не разрешает заменять эти файлы без отдельного выбора.')
     return '\n'.join(lines)
 
 
@@ -67,22 +67,22 @@ def choose_resolutions(conflicts: list[Conflict], *, non_interactive: bool) -> R
         raise ValueError(conflict_message(conflicts))
     for line in conflict_message(conflicts).splitlines():
         print(display(line), file=sys.stderr)
-    print('Replacement saves a backup outside the skills directory. '
-          'Other connections and additional user skills are preserved.', file=sys.stderr)
+    print('Перед заменой резервная копия сохраняется вне каталога skills; путь будет показан в терминале. '
+          'Другие подключения MCP и дополнительные пользовательские skills сохраняются.', file=sys.stderr)
     choices = {}
     for item in conflicts:
         print(display(str(item.path)), file=sys.stderr)
-        prompt = ('[k] Keep my skill (exclude from plugin updates), [r] Back up and replace, '
-                  '[Enter] Cancel: ' if item.kind == 'skill' else
-                  '[r] Back up config and replace only mcp.mlspace, [Enter] Cancel: ')
+        prompt = ('[k] Сохранить мой skill (исключить из обновлений плагина), [r] Создать резервную копию и заменить версией плагина, '
+                  '[Enter] Отменить настройку: ' if item.kind == 'skill' else
+                  '[r] Создать резервную копию конфига и заменить только mcp.mlspace, [Enter] Отменить настройку: ')
         while True:
             choice = input(prompt).strip().lower()
             if not choice:
-                raise ValueError('Setup cancelled; no conflicting files were changed.')
+                raise ValueError('Настройка отменена; конфликтующие файлы не изменены.')
             if choice == 'r' or (choice == 'k' and item.kind == 'skill'):
                 choices[str(item.path)] = ('keep' if choice == 'k' else 'replace', item.fingerprint)
                 break
-            print('Choose one of the displayed options or press Enter to cancel.', file=sys.stderr)
+            print('Введите указанную букву: k или r для skill, r для конфига. Enter отменяет настройку.', file=sys.stderr)
     return choices
 
 
@@ -91,7 +91,7 @@ def backup_replacements(conflicts: list[Conflict], root: Path) -> Path | None:
         return None
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     backup = Path(tempfile.mkdtemp(prefix='setup-', dir=root))
-    print(f'Backup directory: {display(str(backup))}', file=sys.stderr)
+    print(f'Каталог резервной копии: {display(str(backup))}', file=sys.stderr)
     for item in conflicts:
         item.verify_unchanged()
         destination = backup / 'skills' / item.path.parent.name if item.kind == 'skill' else backup / item.path.name
@@ -101,5 +101,5 @@ def backup_replacements(conflicts: list[Conflict], root: Path) -> Path | None:
             shutil.copy2(item.source, destination)
             destination.chmod(0o600)
         if fingerprint(destination) != item.fingerprint or fingerprint(item.source) != item.fingerprint:
-            raise ValueError(f'File changed during backup; originals were not replaced: {item.path}')
+            raise ValueError(f'Файл изменился при создании резервной копии; оригиналы не заменены: {item.path}. Повторите setup.')
     return backup

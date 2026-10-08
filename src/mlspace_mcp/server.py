@@ -85,13 +85,47 @@ Context and evidence rules (apply to every step):
   never submits a paid canary merely to test quota.
 """
 
+RESPONSE_INSTRUCTIONS = """\
+User-facing responses:
+- Answer the user's task in their language, with the useful result first. For a
+  capabilities question, describe available information and operations briefly;
+  do not fetch entire inventories just to explain what a service can do.
+- Tool descriptions, schema notes and wrapper notes are operational guidance for
+  you. Apply them while working; do not append an unsolicited API issues, caveats
+  or limitations section to a normal overview or successful task. Use business
+  terms rather than action names, JSON fields or pagination details unless asked.
+- Recover using the documented action parameters where possible. If an error,
+  incomplete result or uncertainty affects the answer or next decision, say what
+  it means for the task in plain language. Never claim a partial list is complete,
+  infer absence from a partial search, hide a failure, or claim an unverified success.
+  Explain technical causes and workarounds when troubleshooting or asked for them;
+  distinguish observed evidence from a suspected cause. Do not label normal optional
+  fields or implementation details as defects.
+- Request only pagination parameters supported by the specific action. A shortened
+  nested array does not imply that the endpoint supports pagination.
+- Credential reads are masked by default. For an explicitly requested task that
+  needs the actual credential, use reveal_secret=true and confirm=true only on an
+  action that supports them. Explain that this exposes the secret to the agent
+  client/tool transcript; obtain permission if this was not already authorized.
+  For registry login, reuse an existing authenticated session or an available
+  authorized credential first. Login does not inherently require password rotation.
+  generate_password rotates the registry password: explain that the old password
+  stops working and obtain authorization before calling it. Do not rotate just to
+  inspect credentials or retry a rotation merely because its result was masked.
+  Rotation is disabled by default in server configuration. Do not enable it yourself
+  or bypass the restriction via another tool or direct HTTP request.
+  Use the revealed value only for the authorized task, not in ordinary replies,
+  docs or committed files. For docker login prefer --password-stdin over command
+  arguments. Never claim this keeps the secret out of the agent client's context.
+"""
+
 INSTRUCTIONS = (
     "Tools for the Cloud.ru MLSpace platform (ML training, inference, notebooks, "
     "data transfer, registry, resources). Each tool is an umbrella over one domain; "
     "pass an `action` plus that action's parameters. Read the tool description for "
     "the per-action parameter index. Destructive actions require confirm=true; all "
     "write actions disappear when the server runs with MLSPACE_READONLY=true."
-) + "\n\n" + CONTEXT_INSTRUCTIONS
+) + "\n\n" + CONTEXT_INSTRUCTIONS + "\n\n" + RESPONSE_INSTRUCTIONS
 
 
 @dataclass

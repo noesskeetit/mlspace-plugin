@@ -71,6 +71,7 @@ class Op:
     side_effect: bool = False
     kind: str = "item"  # item | list | log | binary
     help: str = ""  # one-line description for the tool's action index
+    reveal_result_keys: tuple[str, ...] = ()  # explicit credential-export actions only
 
 
 @dataclass(frozen=True)
@@ -98,13 +99,24 @@ class DomainTool:
 # universal params injected into every tool
 CONFIRM_PARAM = Param(
     "confirm", bool,
-    "Set true to run an irreversible (destructive) action. Required by such actions.",
+    "Set true to authorize an irreversible action or explicit credential disclosure.",
     default=False,
 )
 RESPONSE_FORMAT_PARAM = Param(
     "response_format", Literal["json", "markdown"],
     "Output format: 'json' (default, compact structured) or 'markdown' (fenced JSON).",
     default="json",
+)
+
+# Some clients expose tools but omit initialize.instructions. Keep the essential
+# response contract at the surface those clients actually deliver to the model.
+RESPONSE_GUIDANCE = (
+    "Agent response guidance: For capability questions, give a short plain-language "
+    "overview without fetching inventories. Treat technical notes as execution guidance, "
+    "not an unsolicited API-problems section. Report errors or partial results when "
+    "they affect the task. Empty logs do not establish a cause; a partial list does "
+    "not prove absence. Never invent a diagnosis or claim unverified success. "
+    "Explain technical details when troubleshooting or explicitly asked."
 )
 
 
@@ -132,7 +144,7 @@ def build_annotations(dt: DomainTool, actions: list[str]) -> ToolAnnotations:
 
 
 def build_description(dt: DomainTool, actions: list[str]) -> str:
-    lines = [dt.summary, "", "Actions:"]
+    lines = [dt.summary, "", RESPONSE_GUIDANCE, "", "Actions:"]
     for a in actions:
         op = dt.actions[a]
         flags = []
@@ -417,6 +429,16 @@ def _build_handler(dt: DomainTool, actions: list[str], settings: Settings):
               "Must agree with target and explicit address arguments; does not replace confirm."),
         CONFIRM_PARAM, RESPONSE_FORMAT_PARAM,
     ]
+    if any(dt.actions[a].reveal_result_keys for a in actions):
+        params.append(Param(
+            "reveal_secret", bool,
+            "Return the credential in plaintext only for an authorized credential task. "
+            "Requires confirm=true; the value enters the agent client/tool transcript. "
+            "Supported actions: " + ", ".join(
+                a for a in actions if dt.actions[a].reveal_result_keys
+            ) + ". Default false keeps credentials masked.",
+            default=False,
+        ))
 
     sig_params = [
         inspect.Parameter("action", inspect.Parameter.KEYWORD_ONLY, annotation=action_type)
@@ -441,6 +463,7 @@ def _build_handler(dt: DomainTool, actions: list[str], settings: Settings):
         ctx: Context = kwargs.pop("ctx")
         action: str = kwargs.pop("action")
         response_format = kwargs.pop("response_format", None) or "json"
+        reveal_secret = kwargs.pop("reveal_secret", False)
         values = {k: v for k, v in kwargs.items() if v is not None}
 
         try:
@@ -457,6 +480,18 @@ def _build_handler(dt: DomainTool, actions: list[str], settings: Settings):
                     f"Action '{action}' is disabled in read-only mode.",
                     hint="Set MLSPACE_READONLY=false to enable write actions.",
                 )
+            if reveal_secret:
+                if not op.reveal_result_keys:
+                    raise MLSpaceError("Credential disclosure is not supported for this action.")
+                if not values.get("confirm"):
+                    raise MLSpaceError(
+                        "Credential disclosure requires confirm=true.",
+                        hint="The secret will be visible to the agent client/tool transcript.",
+                    )
+            redact_keys = tuple(
+                key for key in dt.redact_result_keys
+                if not (reveal_secret and key in op.reveal_result_keys)
+            )
 
             # pagination: only touch "limit" when it is a real query param of THIS op
             # (avoids corrupting an unrelated field that happens to be named "limit").
@@ -484,6 +519,15 @@ def _build_handler(dt: DomainTool, actions: list[str], settings: Settings):
             if op.confirm and not values.get("confirm"):
                 raise MLSpaceError("This action is destructive and irreversible.",
                                    hint="Re-run with confirm=true to proceed.")
+            if (dt.domain == "docker_registry" and action == "generate_password"
+                    and not settings.allow_registry_password_rotation and not settings.dry_run):
+                raise MLSpaceError(
+                    "Registry password rotation is disabled in the server configuration.",
+                    hint="Reuse an existing Docker login or ask the user to authorize rotation. "
+                    "Only after approval may the operator enable "
+                    "MLSPACE_ALLOW_REGISTRY_PASSWORD_ROTATION=true and restart the MCP server. "
+                    "Do not change this setting yourself or bypass it with direct API calls.",
+                )
             client = None
 
             async def selected_client():
@@ -577,7 +621,7 @@ def _build_handler(dt: DomainTool, actions: list[str], settings: Settings):
                 data,
                 response_format,
                 kind=op.kind,
-                redact_keys=dt.redact_result_keys,
+                redact_keys=redact_keys,
                 list_cap=settings.list_max_limit,
                 log_tail=settings.log_tail_lines,
                 # configs (catalog) returns every region; the /configs endpoint has no

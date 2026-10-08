@@ -102,7 +102,7 @@ def test_file_changed_after_conflict_choice_is_not_overwritten(profile):
     plan = setup.prepare_clients(*args, collect_conflicts=True)
     resolutions = {str(c.path): ('replace', c.fingerprint) for c in plan['conflicts']}
     skill.write_text('new edit while user entered keys')
-    with pytest.raises(ValueError, match='changed'):
+    with pytest.raises(ValueError, match='изменил'):
         setup.install_clients(*args, resolutions=resolutions)
     assert skill.read_text() == 'new edit while user entered keys'
     assert not (root / 'opencode.json').exists()
@@ -116,7 +116,7 @@ def test_backup_failure_prevents_replacement(profile, monkeypatch):
     def denied(*a, **kw):
         raise PermissionError('backup denied')
     monkeypatch.setattr('shutil.copytree', denied)
-    with pytest.raises(ValueError, match='Could not back up'):
+    with pytest.raises(ValueError, match='Не удалось создать резервную копию'):
         setup.install_clients(*args, resolutions=resolutions)
     assert skill.read_text() == 'precious edit'
     assert not (root / 'opencode.json').exists()
@@ -144,7 +144,7 @@ def test_support_file_changed_after_choice_prevents_replacement(profile):
     plan = setup.prepare_clients(*args, collect_conflicts=True)
     choices = {str(c.path): ('replace', c.fingerprint) for c in plan['conflicts']}
     helper.write_text('after')
-    with pytest.raises(ValueError, match='changed'):
+    with pytest.raises(ValueError, match='изменил'):
         setup.install_clients(*args, resolutions=choices)
     assert helper.read_text() == 'after'
     assert skill.read_text() == 'custom workflow'
@@ -197,6 +197,6 @@ def test_edit_after_backup_is_never_overwritten(profile, monkeypatch, kind):
         target.write_text(new_text)
         return backup
     monkeypatch.setattr(setup, 'backup_replacements', backup_then_edit)
-    with pytest.raises(ValueError, match='changed'):
+    with pytest.raises(ValueError, match='изменил'):
         setup.install_clients(*args, resolutions=choices)
     assert target.read_text() == new_text

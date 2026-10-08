@@ -34,13 +34,14 @@ def safe_error(exc: Exception) -> str:
     if any(isinstance(item, ssl.SSLCertVerificationError) or
            (isinstance(item, (ssl.SSLError, httpx.ConnectError)) and
             'CERTIFICATE_VERIFY_FAILED' in str(item)) for item in chain):
-        return ('TLS certificate verification failed. Use the corporate CA from your '
-                'administrator: --ca-file /path/to/ca.pem. TLS verification remains enabled.')
+        return ('Не удалось проверить TLS-сертификат API. Получите доверенный корпоративный CA-сертификат у '
+                'администратора и укажите файл PEM: --ca-file /путь/к/ca.pem. Проверка TLS остаётся включённой.')
     status = getattr(exc, 'status', None)
     if isinstance(status, int):
-        return f'API request failed (HTTP {status}); check access keys and workspace permissions.'
+        return f'Запрос к API завершился ошибкой (HTTP {status}). Проверьте ключи доступа и права на выбранные воркспейсы.'
     if any(isinstance(item, httpx.TimeoutException) for item in chain):
-        return 'API request timed out; check network/VPN and retry.'
+        return 'API не ответил вовремя. Проверьте сеть и VPN, затем повторите setup.'
     if any(isinstance(item, httpx.ConnectError) for item in chain):
-        return 'Could not connect; check network/VPN and the API endpoint.'
-    return type(exc).__name__
+        return 'Не удалось подключиться к API. Проверьте сеть, VPN и адрес API (--base-url).'
+    return (f'Не удалось выполнить запрос ({type(exc).__name__}). Проверьте адрес API, '
+            'сеть, VPN и доступность указанного CA-файла, затем повторите настройку.')

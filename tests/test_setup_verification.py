@@ -24,7 +24,7 @@ def test_real_stdio_handshake_finds_credentials_without_inherited_paths(credenti
 
 def test_wrong_process_is_not_reported_as_ready(credentials, caplog):
     from mlspace_mcp.setup_verification import verify_runtime
-    with pytest.raises(ValueError, match='MCP verification failed'):
+    with pytest.raises(ValueError, match='Не удалось проверить запуск MCP'):
         verify_runtime([sys.executable, '-c', 'print("private-secret-in-bad-output")'], credentials)
     assert 'private-secret-in-bad-output' not in caplog.text
 
@@ -43,12 +43,12 @@ def test_installed_plugin_with_changed_skill_or_version_fails_before_launch(tmp_
     skill = next((root / 'skills').glob('*/SKILL.md'))
     original = skill.read_text()
     skill.write_text('local change')
-    with pytest.raises(ValueError, match='skills'):
+    with pytest.raises(ValueError, match='skill'):
         verification.verify_client('codex', '/client', credentials, [])
     skill.write_text(original)
     path = root / '.mcp.json'
     data = json.loads(path.read_text())
     data['mcpServers']['mlspace']['args'][1] = 'mlspace-plugin==999.0'
     path.write_text(json.dumps(data))
-    with pytest.raises(ValueError, match='runtime'):
+    with pytest.raises(ValueError, match='команда запуска'):
         verification.verify_client('codex', '/client', credentials, [])

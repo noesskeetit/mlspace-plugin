@@ -49,7 +49,7 @@ def verify_runtime(command: list[str], credentials: Path, *, direct: bool = Fals
                     await session.initialize()
                     tools = (await session.list_tools()).tools
                     if {t.name: t.inputSchema for t in tools} != {t.name: t.inputSchema for t in expected}:
-                        raise ValueError('Tool inventory differs from this release')
+                        raise ValueError('Набор инструментов MCP отличается от этого релиза')
                     result = await session.call_tool('mlspace_contexts', {})
                     catalogue = json.loads(result.content[0].text)  # type: ignore[union-attr]
                     expected_catalogue = {
@@ -59,7 +59,7 @@ def verify_runtime(command: list[str], credentials: Path, *, direct: bool = Fals
                                        for w in selected_workspaces(settings)],
                     }
                     if result.isError or catalogue != expected_catalogue:
-                        raise ValueError('Saved workspace catalogue differs')
+                        raise ValueError('Каталог воркспейсов MCP отличается от сохранённых настроек')
     logger = logging.getLogger('mcp.client.stdio')
     was_disabled = logger.disabled
     logger.disabled = True  # SDK parse errors include the raw child stdout.
@@ -67,8 +67,8 @@ def verify_runtime(command: list[str], credentials: Path, *, direct: bool = Fals
         with open(os.devnull, 'w') as errors:
             asyncio.run(probe())
     except Exception as exc:
-        raise ValueError('MCP verification failed. Check the saved credentials/CA, uvx availability '
-                         'and access to PyPI, then rerun setup --force. Process output suppressed.') from exc
+        raise ValueError('Не удалось проверить запуск MCP. Проверьте сохранённые ключи и CA-сертификат, наличие uvx '
+                         'и доступ к PyPI, затем повторите setup --force. Вывод процесса скрыт, чтобы не раскрыть ключи.') from exc
     finally:
         logger.disabled = was_disabled
 
@@ -79,7 +79,7 @@ def verify_client(client: str, executable: str, credentials: Path, command: list
     if client == 'opencode':
         config = _read_config(_config(client)).get('mcp', {}).get('mlspace', {})
         if config.get('command') != command or config.get('enabled') is not True:
-            raise ValueError('opencode: installed MCP configuration differs; retry setup.')
+            raise ValueError('opencode: установленная конфигурация MCP отличается от ожидаемой; повторите setup --force.')
         root = Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'opencode/skills'
         state_path = install_state_file()
         if state_path.exists():
@@ -88,19 +88,19 @@ def verify_client(client: str, executable: str, credentials: Path, command: list
     else:
         status = inspect_native(client, executable)
         if not status.enabled or status.version != __version__ or status.plugin_root is None:
-            raise ValueError(f'{client}: installed plugin version or enabled state differs; retry setup.')
+            raise ValueError(f'{client}: версия установленного плагина или состояние включения отличается от ожидаемого; повторите setup --force.')
         cwd = status.plugin_root
         root = cwd / 'skills'
         config = json.loads((cwd / '.mcp.json').read_text())['mcpServers']['mlspace']
         command = ['uvx', '--from', f'mlspace-plugin=={__version__}', 'mlspace-plugin', '--transport', 'stdio']
         if config != {'type': 'stdio', 'command': command[0], 'args': command[1:]}:
-            raise ValueError(f'{client}: installed runtime command differs from this release.')
+            raise ValueError(f'{client}: команда запуска MCP отличается от этого релиза; повторите setup --force.')
     for name, content in sources.items():
         path = root / name / 'SKILL.md'
         if not path.is_file():
-            raise ValueError(f'{client}: installed skills missing: {path}; retry setup.')
+            raise ValueError(f'{client}: отсутствует установленный skill: {path}; повторите setup --force.')
         if client == 'opencode' and str(path) in overrides:
-            print(f'  User skill preserved (not verified against release): {display(str(path))}', file=sys.stderr)
+            print(f'  Пользовательский skill сохранён (соответствие релизу не проверяется): {display(str(path))}', file=sys.stderr)
         elif path.read_text() != content:
-            raise ValueError(f'{client}: installed skills differ from this release: {path}; retry setup.')
+            raise ValueError(f'{client}: установленный skill отличается от этого релиза: {path}; повторите setup --force.')
     verify_runtime(command, credentials, direct=client == 'opencode', cwd=cwd)

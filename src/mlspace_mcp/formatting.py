@@ -113,7 +113,7 @@ def _clean(obj: Any, redact_keys: frozenset[str], list_cap: int) -> Any:
     if isinstance(obj, list):
         cleaned = [_clean(v, redact_keys, list_cap) for v in obj[:list_cap]]
         if len(obj) > list_cap:
-            cleaned.append(f"… {len(obj) - list_cap} more item(s) omitted (use offset/limit to page)")
+            cleaned.append(f"… {len(obj) - list_cap} more item(s) omitted (partial output)")
         return cleaned
     if isinstance(obj, str):
         return _elide_str(obj)

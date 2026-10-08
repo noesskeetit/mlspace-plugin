@@ -20,6 +20,17 @@ def test_caps_long_lists():
     assert "more item(s) omitted" in out["items"][-1]
 
 
+def test_truncation_does_not_invent_pagination_for_nested_arrays():
+    # A connector's nested array is not a paginated collection. The generic
+    # formatter also serves actions using page/page_size or no pagination at all.
+    data = {"parameters": {"tables": ["one", "two", "three"]}}
+    out = json.loads(formatting.format_response(data, list_cap=2))
+    tables = out["parameters"]["tables"]
+    assert tables[:2] == ["one", "two"]
+    assert "1 more item(s) omitted" in tables[2]
+    assert not any(param in tables[2] for param in ("offset", "limit", "page_size"))
+
+
 def test_redacts_secret_keys():
     data = {"x_api_key": "supersecretvalue"}
     out = json.loads(formatting.format_response(data, redact_keys=("x_api_key",)))

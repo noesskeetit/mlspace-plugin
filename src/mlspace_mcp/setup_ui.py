@@ -45,7 +45,7 @@ class WorkspaceSelection:
     def lines(self) -> list[str]:
         rows = self.matches()
         if not rows:
-            return ['No matches. Change the search; previous selections are retained.']
+            return ['Совпадений нет. Измените поиск или очистите его (Ctrl-U); отмеченные строки остаются выбранными.']
         self.cursor %= len(rows)
         start = self.cursor // 12 * 12
         return [display(f"{'>' if start+i == self.cursor else ' '} "
@@ -57,7 +57,7 @@ class WorkspaceSelection:
 def choose_workspaces(rows: list[dict[str, str]], selected_ids: list[str] | None = None,
                       **kwargs: Any) -> list[dict[str, str]]:
     state = WorkspaceSelection(rows, set(selected_ids or []) & {r['id'] for r in rows})
-    search = TextArea(height=1, prompt='Search name / project / ID: ', multiline=False)
+    search = TextArea(height=1, prompt='Поиск по названию / проекту / ID: ', multiline=False)
     bindings = KeyBindings()
 
     def changed(_buffer: Any) -> None:
@@ -93,8 +93,8 @@ def choose_workspaces(rows: list[dict[str, str]], selected_ids: list[str] | None
             search,
             Window(FormattedTextControl(lambda: '\n'.join(state.lines())), height=12),
             Window(FormattedTextControl(lambda: (
-                f'{len(state.matches())} matches / {len(rows)} total; {len(state.selected)} selected. '
-                'Arrows: move | Space: select | Ctrl-U: clear search | Enter: finish | Ctrl-C: cancel'
+                f'Найдено: {len(state.matches())} из {len(rows)}; выбрано: {len(state.selected)}.\n'
+                '↑/↓ курсор | Space выбор | Ctrl-U сброс | Enter готово (≥1) | Ctrl-C отмена'
             )), height=2),
         ]), focused_element=search),
         key_bindings=bindings, full_screen=False, erase_when_done=True,
