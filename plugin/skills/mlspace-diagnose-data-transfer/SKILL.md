@@ -23,6 +23,18 @@ carried out any other way.
 
 ## Procedure
 
+Final-answer contract:
+- **Status and reported counters**: observations returned by the API.
+- **Failure cause and phase**: use explicit matching log evidence; otherwise unknown.
+- **Data impact**: unknown until an independent source/destination contents check
+  establishes it. Even a known cause such as AccessDenied at PutObject does not
+  establish whether other writes in the run already happened. A known cause and
+  unknown data impact can both be true. Zero counters are not that contents check.
+
+The tool's `_mcp_evidence` describes the limits of those observations, not an API
+defect or a separate user-facing warning. Never translate zero counters into
+"the run failed before transfer started" or "nothing was read/written".
+
 Goal: determine whether a data transfer truly failed / was partial, and why.
 1. Resolve the transfer: if transfer_id given use it, else data_transfer list_transfers
    and match transfer_name.

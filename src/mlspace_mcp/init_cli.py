@@ -9,6 +9,7 @@ import re
 import stat
 import sys
 import tempfile
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -35,7 +36,7 @@ from .config import (
     user_config_file,
 )
 from .setup_conflicts import Resolutions, choose_resolutions
-from .setup_ui import choose_workspaces, display, masked_prompt
+from .setup_ui import choose_workspaces, display, hidden_input, masked_prompt
 from .setup_verification import verify_client
 from .tls import safe_error as _safe_error
 from .tls import tls_context
@@ -44,14 +45,15 @@ HEADER = f'# MLSpace credentials, written by mlspace-plugin setup.\n{LITERAL_DOT
 
 
 def _ask(label: str, secret: bool = True, hidden: bool = True) -> str:
-    while True:
-        value = masked_prompt(f'  {label}: ') if hidden else input(f'  {label}: ')
-        if re.match(r'^\s*(?:export\s+)?MLSPACE_\w+\s*=', value):
-            print('Вставьте только значение ключа: без MLSPACE_...=, export и кавычек вокруг значения.', file=sys.stderr)
-        elif value.strip():
-            return value if secret else value.strip()
-        else:
-            print('Поле обязательно. Вставьте значение ключа; звёздочки подтверждают ввод и скрывают его содержимое.', file=sys.stderr)
+    with hidden_input() if hidden else nullcontext():
+        while True:
+            value = masked_prompt(f'  {label}: ') if hidden else input(f'  {label}: ')
+            if re.match(r'^\s*(?:export\s+)?MLSPACE_\w+\s*=', value):
+                print('Вставьте только значение ключа: без MLSPACE_...=, export и кавычек вокруг значения.', file=sys.stderr)
+            elif value.strip():
+                return value if secret else value.strip()
+            else:
+                print('Поле обязательно. Вставьте значение ключа; звёздочки подтверждают ввод и скрывают его содержимое.', file=sys.stderr)
 
 
 def _resolve_base_url(target: Path, override: str | None) -> str:
@@ -315,14 +317,15 @@ def _run_init(path: Path | None, **options: Any) -> int:
     else:
         source = {}
     keys = {}
-    for name, label in [('CLIENT_ID', 'Cloud.ru Key ID'), ('CLIENT_SECRET', 'Cloud.ru Key Secret')]:
-        value = source.get('MLSPACE_' + name)
-        if not value or not value.strip():
-            if non_interactive or options['credentials_file'] or options['from_env']:
-                raise ValueError('Для этого адреса API отсутствуют ключи. Введите их через setup в терминале '
-                                 'либо явно укажите --from-env или --credentials-file.')
-            value = _ask(label, secret=name == 'CLIENT_SECRET')
-        keys[name] = value
+    with hidden_input():
+        for name, label in [('CLIENT_ID', 'Cloud.ru Key ID'), ('CLIENT_SECRET', 'Cloud.ru Key Secret')]:
+            value = source.get('MLSPACE_' + name)
+            if not value or not value.strip():
+                if non_interactive or options['credentials_file'] or options['from_env']:
+                    raise ValueError('Для этого адреса API отсутствуют ключи. Введите их через setup в терминале '
+                                     'либо явно укажите --from-env или --credentials-file.')
+                value = _ask(label, secret=name == 'CLIENT_SECRET')
+            keys[name] = value
     ca = str(options['ca_file'] or saved.get('MLSPACE_CA_FILE') or os.environ.get('SSL_CERT_FILE') or '')
     ca = str(Path(ca).expanduser().absolute()) if ca else ''
     if not listing:

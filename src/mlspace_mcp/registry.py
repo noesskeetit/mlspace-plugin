@@ -25,6 +25,7 @@ from pydantic import Field
 
 from . import bodyspec, formatting
 from .config import Settings
+from .data_transfer_hooks import history_evidence, log_evidence
 from .errors import MLSpaceError
 from .job_hooks import (
     guard_job_delete,
@@ -322,6 +323,10 @@ PREFLIGHT[("POST", "/public/v2/jobs")] = preflight_job_run
 PREFLIGHT[("GET", "/public/v2/jobs")] = preflight_jobs_list
 GUARDS[("DELETE", "/public/v2/jobs/{job_name}")] = guard_job_delete
 POSTPROCESS[("DELETE", "/public/v2/jobs/{job_name}")] = postprocess_job_delete
+POSTPROCESS[("GET", "/public/v2/data_transfer/v3/history")] = history_evidence
+POSTPROCESS[("GET", "/public/v2/data_transfer/v3/history/status/stream")] = history_evidence
+POSTPROCESS[("GET", "/public/v2/data_transfer/v2/events/list")] = log_evidence
+POSTPROCESS[("GET", "/public/v2/data_transfer/v3/connectors/{connector_type}/{id_}/try/logs")] = log_evidence
 
 
 def _postprocess_delete_connectors(data: Any, values: dict[str, Any]) -> Any:

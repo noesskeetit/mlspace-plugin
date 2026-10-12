@@ -184,6 +184,9 @@ ACTIONS: dict[str, Op] = {
         required=("offset", "limit"),
         kind="list",
         help="Get transfer event logs (needs offset+limit and either history_id or transfer_id). "
+             "In a diagnosis, report cause and data impact separately. Explicitly state "
+             "that data impact is unverified unless source/destination contents were checked; "
+             "AccessDenied or zero counters cannot prove that nothing was written. "
              "If empty, cross-check run status and connector logs; do not infer success "
              "or a specific cause from absent events. Rerunning changes state; never "
              "recommend a rerun as a read-only diagnostic check.",
@@ -271,8 +274,13 @@ DOMAIN = DomainTool(
     name="mlspace_data_transfer",
     title="MLSpace Data Transfer",
     summary=(
-        "Manage MLSpace data-transfer connectors, transfers, and migration history "
-        "(create/update/try connectors, run/cancel/rerun transfers, inspect logs). "
+        "Inspect connectors, transfers, run history and logs; manage transfers and user connectors. "
+        "Capability boundary: creating connectors is supported ONLY for postgresql, mssql, mysql, "
+        "clickhouse, oracledb, s3amazon, s3custom, s3google. Existing system connectors "
+        "(NFS, S3 MLSpace/Evolution/DataHub, HDFS) can be inspected and used by transfers, "
+        "but this tool cannot create them. Do not describe source discovery as creation support. "
+        "For a service overview, briefly describe connectors, transfer configurations, and "
+        "run history/logs. Diagnostic caveats belong in an actual investigation. "
         "For failed-run diagnosis, use the mlspace-diagnose-data-transfer skill when available."
     ),
     actions=ACTIONS,

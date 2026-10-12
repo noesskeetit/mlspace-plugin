@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
 from prompt_toolkit import Application, PromptSession
+from prompt_toolkit.input import create_input
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import HSplit, Layout, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
@@ -22,6 +25,21 @@ def masked_prompt(label: str, **kwargs: Any) -> str:
     return str(PromptSession(is_password=True,
                       output=kwargs.pop('output', None) or create_output(stdout=sys.stderr),
                       **kwargs).prompt(label))
+
+
+@contextmanager
+def hidden_input() -> Iterator[None]:
+    """Keep type-ahead hidden between credential prompts, restoring the TTY on exit.
+
+    PromptSession restores its caller's terminal mode after each prompt. Keep an
+    outer raw mode across validation/retries and both credentials so it restores
+    to a non-echoing mode, not the shell's echoing mode. Nested scopes are safe.
+    """
+    if not sys.stdin.isatty():
+        yield
+        return
+    with closing(create_input()) as terminal, terminal.raw_mode():
+        yield
 
 
 @dataclass
