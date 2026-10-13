@@ -16,7 +16,7 @@ marketplace этого репозитория и устанавливает `mls
 
 ## Состав
 
-- 12 скиллов в `skills/`;
+- 13 скиллов в `skills/`;
 - манифесты Agent Plugins, Claude Code и Codex;
 - команда MCP `uvx --from mlspace-plugin==<версия> mlspace-plugin --transport stdio`.
 

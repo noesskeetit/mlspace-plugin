@@ -126,7 +126,7 @@ def test_real_opencode_loads_mcp_and_user_skills_after_setup_and_retry(
     names = [item['name'] for item in skills]
     assert set(_skill_sources()) | {'mlspace-my-qa-workflow'} <= set(names)
     assert len(names) == len(set(names))
-    assert len([name for name in names if name.startswith('mlspace-')]) == 13
+    assert len([name for name in names if name.startswith('mlspace-')]) == 14
     cli(home, [sys.executable, '-m', 'mlspace_mcp', 'setup', '--force', '--non-interactive',
                '--client', 'opencode', '--workspace', 'workspace-001'])
     assert extra.read_bytes() == extra_content
@@ -246,4 +246,37 @@ def test_opencode_session_executes_user_skill_and_mcp_read_over_tls(
     assert 'workspace-001' in transcript and 'workspace-299' in transcript
     assert 'LOCAL_QA_COMPLETE' in result.stdout
     assert ('GET', '/public/v2/workspaces/v3/workspace-001') in calls
+    assert all(method == 'GET' or path == '/public/v2/service_auth' for method, path in calls)
+
+
+@pytest.mark.parametrize('local_api', [{'workspace-299'}], indirect=True)
+def test_real_terminal_reselects_after_403_and_connects_opencode(
+        setup_environment, local_api, opencode):
+    from mlspace_mcp.config import read_dotenv_file
+
+    home = setup_environment
+    endpoint, pem, calls = local_api
+    command = [sys.executable, '-m', 'mlspace_mcp', 'setup',
+               '--client-path', f'opencode={opencode}', '--base-url', endpoint,
+               '--ca-file', str(pem)]
+    code, output = terminal(home, command, [
+        (b'Cloud.ru Key ID:', b'dummy-id\r'),
+        (b'Cloud.ru Key Secret:', b'dummy-secret\r'),
+        ('Поиск по названию / проекту / ID:'.encode(), b'workspace-001 \x15workspace-299 \r'),
+        # The new picker retains workspace-001; Enter confirms that reduced selection.
+        ('Выберите воркспейсы повторно.'.encode(), b'\r'),
+    ])
+    assert code == 0, output
+    assert 'HTTP 403' in output
+    assert 'Проверено выбранных воркспейсов: 1/2' in output
+    assert 'Проверено выбранных воркспейсов: 1/1' in output
+    assert 'dummy-secret' not in output and 'dummy-id' not in output
+    target = home / 'custom-config/mlspace-plugin/.env'
+    saved = read_dotenv_file(target)
+    assert saved['MLSPACE_WORKSPACE_ID'] == 'workspace-001'
+    assert [row['id'] for row in json.loads(saved['MLSPACE_WORKSPACES'])] == ['workspace-001']
+    mcp = cli(home, [opencode, 'mcp', 'list'])
+    assert 'connected' in (mcp.stdout + mcp.stderr).lower()
+    skills = json.loads(cli(home, [opencode, 'debug', 'skill']).stdout)
+    assert 'mlspace-transfer-data' in {item['name'] for item in skills}
     assert all(method == 'GET' or path == '/public/v2/service_auth' for method, path in calls)

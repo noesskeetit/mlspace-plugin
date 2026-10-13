@@ -9,6 +9,9 @@ compatibility: Requires the `mlspace` MCP server from this plugin (Cloud.ru MLSp
 
 Copy/sync S3 -> NFS for a GPU job, optionally on a schedule. Write action.
 
+For NFS -> NFS, cross-cluster/cross-workspace transfers, other connector routes,
+or checking NFS file-count limits, use `mlspace-transfer-data` from this plugin.
+
 This skill drives the `mlspace` MCP server shipped in the same plugin. If its
 tools are not connected, say so instead of guessing — none of these steps can be
 carried out any other way.

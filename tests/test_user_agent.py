@@ -29,9 +29,9 @@ def test_onboarding_identifies_every_outgoing_request(flow):
         respx.get(f"{BASE_URL}/public/v2/workspaces/v3/ws-1").respond(
             200, json={"id": "ws-1"},
         )
-        assert _verify({
+        assert not _verify({
             "CLIENT_ID": "cid", "CLIENT_SECRET": "csecret", "WORKSPACE_ID": "ws-1",
-        }, base_url=BASE_URL) is None
+        }, base_url=BASE_URL).errors
     assert respx.calls
     for call in respx.calls:
         assert call.request.headers["user-agent"] == f"mlspace-plugin/{__version__}"

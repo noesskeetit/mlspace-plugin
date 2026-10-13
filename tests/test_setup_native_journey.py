@@ -33,7 +33,8 @@ def setup_environment(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def local_api(tmp_path):
+def local_api(tmp_path, request):
+    denied_ids = getattr(request, 'param', set())
     rows = [{'id': f'workspace-{i:03}', 'name': f'workspace-{i:03}', 'project_name': f'project-{i // 100}'}
             for i in range(300)]
     calls = []
@@ -63,6 +64,8 @@ def local_api(tmp_path):
                 return self.reply(200, {'x-api-key': 'derived-not-persisted'})
             for row in rows:
                 if path == '/public/v2/workspaces/v3/' + row['id']:
+                    if row['id'] in denied_ids:
+                        return self.reply(403, {'detail': 'Workspace access denied'})
                     return self.reply(200, row)
             self.reply(404, {})
     ca = trustme.CA()

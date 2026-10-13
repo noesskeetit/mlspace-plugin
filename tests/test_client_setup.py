@@ -38,7 +38,7 @@ def test_install_opencode_preserves_config_installs_skills_and_is_idempotent(tmp
     content = config.read_text()
     assert 'personal comment' in content and '"model":"keep"' in content
     assert str(env_file) in content
-    assert len(list((tmp_path / '.config/opencode/skills').glob('mlspace-*/SKILL.md'))) == 12
+    assert len(list((tmp_path / '.config/opencode/skills').glob('mlspace-*/SKILL.md'))) == 13
     install_clients(*args)
     assert config.read_text() == content
 
@@ -117,7 +117,7 @@ def test_opencode_skills_do_not_leak_into_native_clients(tmp_path, monkeypatch):
     monkeypatch.setenv('HOME', str(tmp_path))
     monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path / '.config'))
     install_clients({'opencode': '/usr/bin/true'}, tmp_path / '.env', ['/bin/echo'])
-    assert len(list((tmp_path / '.config/opencode/skills').glob('*/SKILL.md'))) == 12
+    assert len(list((tmp_path / '.config/opencode/skills').glob('*/SKILL.md'))) == 13
     assert not (tmp_path / '.agents/skills').exists()
     assert not (tmp_path / '.claude/skills').exists()
 

@@ -10,6 +10,7 @@ import stat
 import sys
 import tempfile
 from contextlib import nullcontext
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -126,8 +127,14 @@ def save_credential_pointer(env_file: Path) -> None:
     atomic_write(pointer, json.dumps({'env_file': str(env_file.absolute())}) + '\n')
 
 
-def _verify(values: dict[str, str], *, base_url: str) -> str | None:
-    """Check selected workspace details and IDs. Returns a safe error, or None.
+@dataclass
+class WorkspaceVerification:
+    verified_ids: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
+
+def _verify(values: dict[str, str], *, base_url: str) -> WorkspaceVerification:
+    """Check workspace details and IDs, retaining successful selections for retry.
 
     The caller preserves the previous file if any selected workspace fails.
     """
@@ -140,7 +147,8 @@ def _verify(values: dict[str, str], *, base_url: str) -> str | None:
     from .config import Settings
     from .workspace_context import WorkspaceClients
 
-    async def run() -> str | None:
+    async def run() -> WorkspaceVerification:
+        result = WorkspaceVerification()
         try:
             # Explicit values keep old environment selectors out of this check.
             settings = Settings(  # type: ignore[call-arg]
@@ -162,8 +170,6 @@ def _verify(values: dict[str, str], *, base_url: str) -> str | None:
                     client_secret=values["CLIENT_SECRET"],
                 )
                 clients = WorkspaceClients(settings, http, tokens)
-                verified = 0
-                errors = []
                 for selection in clients.selected:
                     try:
                         client = await clients.resolve(selection.id)
@@ -172,19 +178,19 @@ def _verify(values: dict[str, str], *, base_url: str) -> str | None:
                             path_params={"workspace_id": selection.id},
                         )
                         if not isinstance(data, dict) or data.get("id") != selection.id:
-                            errors.append(f"{selection.id}: API не подтвердил ID воркспейса; проверьте доступ и повторите setup")
+                            result.errors.append(f"{selection.id}: API не подтвердил ID воркспейса; проверьте доступ и повторите выбор")
                             continue
-                        verified += 1
+                        result.verified_ids.append(selection.id)
                     except Exception as exc:  # noqa: BLE001 — verify every selected workspace
-                        errors.append(f"{selection.id}: {_safe_error(exc)}")
+                        result.errors.append(f"{selection.id}: {_safe_error(exc)}")
                 print(
-                    f"  Проверено выбранных воркспейсов: {verified}/{len(clients.selected)} "
+                    f"  Проверено выбранных воркспейсов: {len(result.verified_ids)}/{len(clients.selected)} "
                     "(доступ к сведениям и совпадение ID)",
                     file=sys.stderr,
                 )
-                return "; ".join(errors) or None
         except Exception as exc:  # noqa: BLE001 — report failures without exposing transport details
-            return _safe_error(exc)
+            result.errors.append(_safe_error(exc))
+        return result
 
     return asyncio.run(run())
 
@@ -376,15 +382,29 @@ def _run_init(path: Path | None, **options: Any) -> int:
               if key.startswith('MLSPACE_') and value is not None
               and key not in {'MLSPACE_API_KEY', 'MLSPACE_WORKSPACE_ID', 'MLSPACE_WORKSPACES', 'MLSPACE_NAMESPACE'}}
     values.update(keys)
-    values.update(BASE_URL=endpoint, CA_FILE=ca,
-                  WORKSPACES=json.dumps(selected, ensure_ascii=False, separators=(',', ':')))
-    if len(selected) == 1:
-        values['WORKSPACE_ID'] = selected[0]['id']
-    print(f'[3/4] Проверяем доступ и ID выбранных воркспейсов: {len(selected)}…', file=sys.stderr)
-    if options['verify']:
-        problem = _verify(values, base_url=endpoint)
-        if problem:
-            raise ValueError(problem)
+    values.update(BASE_URL=endpoint, CA_FILE=ca)
+    while True:
+        values['WORKSPACES'] = json.dumps(selected, ensure_ascii=False, separators=(',', ':'))
+        values.pop('WORKSPACE_ID', None)
+        if len(selected) == 1:
+            values['WORKSPACE_ID'] = selected[0]['id']
+        print(f'[3/4] Проверяем доступ и ID выбранных воркспейсов: {len(selected)}…', file=sys.stderr)
+        if not options['verify']:
+            break
+        result = _verify(values, base_url=endpoint)
+        if not result.errors:
+            break
+        if non_interactive:
+            raise ValueError('; '.join(result.errors))
+        print('Не удалось проверить часть выбранных воркспейсов:', file=sys.stderr)
+        for error in result.errors:
+            print('  ' + display(error), file=sys.stderr)
+        print('Выберите воркспейсы повторно. Проверенные остались отмеченными; с непроверенных '
+              'отметки сняты. Можно выбрать другие или снова отметить нужные для повторной проверки. '
+              'Ключи повторно вводить не нужно. Изменения ещё не сохранены.\n'
+              'Печатайте название, проект или ID для поиска; Space отмечает строку, Enter подтверждает '
+              'выбор (нужен хотя бы один), Ctrl-C отменяет настройку.', file=sys.stderr)
+        selected = choose_workspaces(rows, result.verified_ids)
     if ca:
         # Persist the validated public CA independently of /tmp and shell environment.
         content = Path(ca).read_text(encoding='ascii')

@@ -62,7 +62,9 @@ def test_verify_checks_only_selected_workspaces_with_their_own_headers(capsys):
         {"id": "ws-demo", "name": "demo", "project_name": "p", "api_key": "key-demo"},
         {"id": "ws-v100", "name": "v100", "project_name": "p", "api_key": "key-v100"},
     ])}
-    assert _verify(values, base_url=BASE_URL) is None
+    result = _verify(values, base_url=BASE_URL)
+    assert not result.errors
+    assert result.verified_ids == ["ws-demo", "ws-v100"]
     assert seen == [("ws-demo", "ws-demo", "key-demo"), ("ws-v100", "ws-v100", "key-v100")]
     assert "Проверено выбранных воркспейсов: 2/2" in capsys.readouterr().err
     assert not any(call.request.url.path.endswith("/v3/") for call in respx.calls)
@@ -81,8 +83,9 @@ def test_verify_reports_partial_coverage_and_continues_after_failure(capsys, bad
         {"id": "ws-demo", "name": "demo", "project_name": "p", "api_key": "key-demo"},
         {"id": "ws-v100", "name": "v100", "project_name": "p", "api_key": "key-v100"},
     ])}
-    problem = _verify(values, base_url=BASE_URL)
-    assert problem is not None
+    result = _verify(values, base_url=BASE_URL)
+    assert result.verified_ids == ["ws-v100"]
+    problem = "; ".join(result.errors)
     assert "ws-demo" in problem
     assert "csecret-1" not in problem
     assert "key-demo" not in problem

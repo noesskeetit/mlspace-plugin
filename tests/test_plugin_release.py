@@ -26,7 +26,7 @@ def test_release_contains_same_plugin_for_both_clients(tmp_path):
     plugin = root / "plugin"
     portable = json.loads((plugin / "plugin.json").read_text())
     assert portable["version"] == __version__
-    assert len(list((plugin / "skills").glob("*/SKILL.md"))) == 12
+    assert len(list((plugin / "skills").glob("*/SKILL.md"))) == 13
     for client in (".agents/plugins", ".claude-plugin"):
         marketplace = json.loads((root / client / "marketplace.json").read_text())
         entry = marketplace["plugins"][0]

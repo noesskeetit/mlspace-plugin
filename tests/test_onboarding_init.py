@@ -1,6 +1,7 @@
 import json
 import stat
 
+import httpx
 import pytest
 import respx
 
@@ -121,6 +122,95 @@ def test_verification_failure_never_saves_new_file(tmp_path):
     assert run_init(target, base_url=BASE, config_only=True, non_interactive=True,
                     from_env=True, workspace_ids=['ws2']) == 1
     assert not target.exists()
+
+
+@pytest.mark.parametrize('failure_at', ['details', 'key'])
+@respx.mock
+def test_interactive_verification_reopens_picker_without_reasking_keys(
+    tmp_path, monkeypatch, capsys, failure_at,
+):
+    from mlspace_mcp import init_cli
+
+    routes()
+    if failure_at == 'details':
+        respx.get(BASE + '/public/v2/workspaces/v3/ws1').respond(403)
+    else:
+        respx.get(BASE + '/public/v2/workspaces/v1/x_api_key').mock(
+            side_effect=lambda request: httpx.Response(
+                403 if request.headers['x-workspace-id'] == 'ws1' else 200,
+                json={'x-api-key': 'derived-not-stored'},
+            ),
+        )
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+    prompted = []
+
+    def ask(label, **kwargs):
+        prompted.append(label)
+        return 'typed-id' if 'ID' in label else 'typed-secret'
+
+    monkeypatch.setattr(init_cli, '_ask', ask)
+    target = tmp_path / 'new.env'
+    selections = []
+
+    def choose(rows, selected_ids=None):
+        selections.append(selected_ids)
+        assert not target.exists()
+        assert len(selections) <= 2
+        return rows if len(selections) == 1 else [row for row in rows if row['id'] == 'ws2']
+
+    monkeypatch.setattr(init_cli, 'choose_workspaces', choose)
+    assert run_init(target, base_url=BASE, config_only=True) == 0
+    assert selections == [[], ['ws2']]
+    assert len(prompted) == 2
+    saved = read_dotenv_file(target)
+    assert saved['MLSPACE_WORKSPACE_ID'] == 'ws2'
+    assert [row['id'] for row in json.loads(saved['MLSPACE_WORKSPACES'])] == ['ws2']
+    assert saved['MLSPACE_CLIENT_SECRET'] == 'typed-secret'
+    output = capsys.readouterr().err
+    assert 'HTTP 403' in output and 'повтор' in output.lower()
+    assert 'typed-secret' not in output and 'typed-id' not in output
+
+
+@respx.mock
+def test_cancel_workspace_reselection_preserves_previous_file(tmp_path, monkeypatch):
+    routes()
+    respx.get(BASE + '/public/v2/workspaces/v3/ws1').respond(403)
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+    target = tmp_path / '.env'
+    original = 'MLSPACE_READONLY=true\n'
+    target.write_text(original)
+
+    def cancel(rows, selected_ids=None):
+        assert selected_ids == ['ws2']
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr('mlspace_mcp.init_cli.choose_workspaces', cancel)
+    assert run_init(target, force=True, base_url=BASE, config_only=True,
+                    from_env=True, workspace_ids=['ws1', 'ws2']) == 130
+    assert target.read_text() == original
+
+
+@respx.mock
+def test_retry_single_workspace_can_select_multiple_without_stale_default(tmp_path, monkeypatch):
+    routes()
+    respx.get(BASE + '/public/v2/workspaces/v3/ws1').respond(200, json={'id': 'ws1'})
+    respx.get(BASE + '/public/v2/workspaces/v3/ws2').mock(side_effect=[
+        httpx.Response(403),
+        httpx.Response(200, json={'id': 'ws2'}),
+    ])
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+
+    def choose(rows, selected_ids=None):
+        assert selected_ids == []
+        return rows
+
+    monkeypatch.setattr('mlspace_mcp.init_cli.choose_workspaces', choose)
+    target = tmp_path / '.env'
+    assert run_init(target, base_url=BASE, config_only=True, from_env=True,
+                    workspace_ids=['ws2']) == 0
+    saved = read_dotenv_file(target)
+    assert 'MLSPACE_WORKSPACE_ID' not in saved
+    assert len(json.loads(saved['MLSPACE_WORKSPACES'])) == 2
 
 
 @respx.mock
@@ -263,7 +353,7 @@ def test_human_init_connects_detected_client_and_skills_after_two_masked_prompts
     assert read_dotenv_file(target)['MLSPACE_CLIENT_SECRET'] == 'human-secret'
     config = json.loads((tmp_path / '.config/opencode/opencode.json').read_text())
     assert config['mcp']['mlspace']['environment'] == {'MLSPACE_ENV_FILE': str(target)}
-    assert len(list((tmp_path / '.config/opencode/skills').glob('*/SKILL.md'))) == 12
+    assert len(list((tmp_path / '.config/opencode/skills').glob('*/SKILL.md'))) == 13
     output = capsys.readouterr()
     assert 'human-secret' not in output.err + output.out
     assert 'human-id' not in output.err + output.out
