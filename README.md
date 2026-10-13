@@ -226,7 +226,7 @@ write-запросов подаются параметром `body: dict`; об�
 
 ## Плагин: Codex, Claude Code и совместимые агенты
 
-[Поставка MLSpace](plugin/README.md) объединяет MCP-сервер и 13 скиллов.
+[Поставка MLSpace](plugin/README.md) объединяет MCP-сервер и 17 скиллов.
 Обычная установка — `uvx mlspace-plugin@latest setup`: marketplace подключается
 автоматически. Нативные клиенты управляют плагином `mlspace@mlspace` сами.
 Манифест фиксирует точную версию runtime из PyPI вместе со скиллами.

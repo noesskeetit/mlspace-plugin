@@ -65,8 +65,8 @@ def _references(body: str) -> list[tuple[str, str]]:
     return pairs
 
 
-def test_thirteen_skills_ship():
-    assert len(SKILLS) == 13
+def test_seventeen_skills_ship():
+    assert len(SKILLS) == 17
 
 
 def test_reference_extraction_is_not_vacuous():

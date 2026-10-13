@@ -5,6 +5,7 @@ import select
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -29,7 +30,13 @@ def opencode(setup_environment, monkeypatch):
 
 
 def cli(home, command, *, timeout=45):
-    result = subprocess.run(command, cwd=home, text=True, capture_output=True, timeout=timeout)
+    # The installed CLI truncates large `debug skill` JSON at 64 KiB when piped.
+    # A regular file captures the complete inventory, including skill contents.
+    with tempfile.TemporaryFile(mode='w+') as output:
+        result = subprocess.run(command, cwd=home, text=True, stdout=output,
+                                stderr=subprocess.PIPE, timeout=timeout)
+        output.seek(0)
+        result.stdout = output.read()
     assert result.returncode == 0, result.stdout + result.stderr
     return result
 
@@ -126,7 +133,7 @@ def test_real_opencode_loads_mcp_and_user_skills_after_setup_and_retry(
     names = [item['name'] for item in skills]
     assert set(_skill_sources()) | {'mlspace-my-qa-workflow'} <= set(names)
     assert len(names) == len(set(names))
-    assert len([name for name in names if name.startswith('mlspace-')]) == 14
+    assert len([name for name in names if name.startswith('mlspace-')]) == 18
     cli(home, [sys.executable, '-m', 'mlspace_mcp', 'setup', '--force', '--non-interactive',
                '--client', 'opencode', '--workspace', 'workspace-001'])
     assert extra.read_bytes() == extra_content

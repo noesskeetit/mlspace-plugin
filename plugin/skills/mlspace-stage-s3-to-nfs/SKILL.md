@@ -9,6 +9,10 @@ compatibility: Requires the `mlspace` MCP server from this plugin (Cloud.ru MLSp
 
 Copy/sync S3 -> NFS for a GPU job, optionally on a schedule. Write action.
 
+Read [the shared transfer checks](../mlspace-transfer-data/SKILL.md) for file-count
+limits, connector permissions and destination prerequisites, then follow this
+S3-specific procedure. Do not reload this file when following the shared router.
+
 For NFS -> NFS, cross-cluster/cross-workspace transfers, other connector routes,
 or checking NFS file-count limits, use `mlspace-transfer-data` from this plugin.
 
@@ -32,8 +36,11 @@ carried out any other way.
 Goal: copy/sync S3 -> NFS, optionally on a nightly schedule (write actions;
 refused under MLSPACE_READONLY=true).
 1. data_transfer list_connectors with page=1, page_size=20; continue as needed to
-   locate the requested connectors. SOURCE: an object-storage connector (s3amazon/
-   s3custom/s3google). DEST: an NFS/cluster connector. Capture both connector ids.
+   locate the requested connectors. SOURCE: a verified object-storage connector
+   (e.g. s3amazon/s3custom/s3google/s3evolution, as supported by the endpoint).
+   DEST: an NFS/cluster connector with its actual nfs/nfsprivate/nfsshared type.
+   Capture both connector ids. Do not create a custom s3evolution or NFS connector;
+   reuse system connectors or use an authorized custom S3 connector where appropriate.
    Reuse existing system connectors rather than attempting to create them. A system
    NFS connector may be absent from list output. For the selected destination
    workspace, its workspace ID can be tested as a candidate via get_connector
@@ -47,7 +54,10 @@ refused under MLSPACE_READONLY=true).
    direct route is not established; do not launch a multi-hop transfer without an
    agreed intermediate destination and confirmation of both supported legs.
    If names or destination remain ambiguous, ask the user.
-3. (optional, S3 only) try_connector to pre-check connectivity (+ its /try/logs).
+3. Read existing connector details/logs first. Only for a supported custom S3
+   connector, and when activation is authorized, use try_connector to check
+   connectivity and activate it. Never use it for a system s3evolution connector
+   or merely to read logs; get_connector_logs reads the existing logs.
 4. Ensure source_path + destination_path are known (ask if absent). Choose the
    strategy from the user's overwrite/append/sync intent; recurrence alone does
    not determine it. For a schedule, confirm the time and timezone and build
@@ -60,10 +70,14 @@ refused under MLSPACE_READONLY=true).
    For a one-off run omit crontab; creation starts the transfer immediately.
 5. list_transfers; if one matches this source->dest and the user means "edit", capture
    its id for update instead of create.
-6. create_transfer (body=TransferInputViewModelV5: name, connector ids, paths,
-   cluster_name, strategy, optional crontab) OR update_transfer(id_, full body).
+6. create_transfer (body=TransferInputViewModelV5: name, cluster_name, connector_id,
+   destination_connector_id, connector_type, destination_connector_type, strategy,
+   favorite, query={source, destination}, optional crontab/description)
+   OR update_transfer(id_, full body).
    To just enable/disable: switch_transfer(id_, body={"active": true|false}).
-7. Verify: list_history(transfer_id) -> latest run id + status; get_history_status.
+7. Verify: get_transfer(transfer_id) to read back the rule; list_history(transfer_id,
+   page=1, page_size=20) to identify the matching run by IDs and times rather than
+   list order; get_history_status(ids=[history_id]) to check that run's status.
 Output: source and destination, the created/updated transfer id, schedule with
 timezone, and verified run status. A future scheduled run has not succeeded yet.
 Before writing, summarize the destination, strategy and schedule for the user;

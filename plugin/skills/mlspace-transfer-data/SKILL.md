@@ -1,6 +1,6 @@
 ---
 name: mlspace-transfer-data
-description: "Create or update Cloud.ru MLSpace Data Transfer rules: NFS to NFS across clusters/workspaces, S3 to/from NFS, and other supported connector routes. Use for copying, syncing or scheduling data movement; verify the exact route and restrictions first."
+description: "Plan Cloud.ru MLSpace data movement when the route is not yet chosen, or apply the shared create/update/schedule/verification procedure for mlspace_data_transfer. Route-specific skills cover NFS to NFS, NFS to S3, S3 to NFS, S3 to S3 and database exports."
 license: MIT
 compatibility: Requires the `mlspace` MCP server from this plugin (Cloud.ru MLSpace credentials needed).
 ---
@@ -10,6 +10,19 @@ compatibility: Requires the `mlspace` MCP server from this plugin (Cloud.ru MLSp
 Use `mlspace_data_transfer` to prepare and, when requested, create/update a transfer.
 An explanation or route feasibility question needs reads only. Creation without a
 schedule starts a transfer immediately; it is not a dry run. Respect read-only mode.
+
+For a known route, read only the matching procedure:
+
+| Requested movement | Procedure |
+| --- | --- |
+| NFS → NFS, including other regions/workspaces | [NFS transfer](../mlspace-transfer-nfs-to-nfs/SKILL.md) |
+| NFS → S3: results, checkpoints, datasets | [S3 export](../mlspace-export-nfs-to-s3/SKILL.md) |
+| S3 → NFS: staging data for jobs | [NFS staging](../mlspace-stage-s3-to-nfs/SKILL.md) |
+| S3 → S3, including Evolution/Advanced | [Bucket migration](../mlspace-migrate-s3-to-s3/SKILL.md) |
+| Database → supported storage | [Database export](../mlspace-export-database-data/SKILL.md) |
+
+If arriving from that procedure, continue below without reloading it. Do not read
+all sibling skills for one request.
 
 ## Resolve both ends
 

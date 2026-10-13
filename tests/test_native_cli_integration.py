@@ -103,7 +103,7 @@ def test_native_cli_installs_repeats_and_updates(tmp_path, monkeypatch, git_mark
     updated = native.install_native(client, executable, '0.0.2')
     assert updated.version == '0.0.2' and updated.enabled
     assert updated.plugin_root != first.plugin_root
-    assert len(list((updated.plugin_root / 'skills').glob('*/SKILL.md'))) == 13
+    assert len(list((updated.plugin_root / 'skills').glob('*/SKILL.md'))) == 17
     assert not (home / '.agents/skills').exists()
 
 

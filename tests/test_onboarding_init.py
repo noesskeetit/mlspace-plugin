@@ -353,7 +353,7 @@ def test_human_init_connects_detected_client_and_skills_after_two_masked_prompts
     assert read_dotenv_file(target)['MLSPACE_CLIENT_SECRET'] == 'human-secret'
     config = json.loads((tmp_path / '.config/opencode/opencode.json').read_text())
     assert config['mcp']['mlspace']['environment'] == {'MLSPACE_ENV_FILE': str(target)}
-    assert len(list((tmp_path / '.config/opencode/skills').glob('*/SKILL.md'))) == 13
+    assert len(list((tmp_path / '.config/opencode/skills').glob('*/SKILL.md'))) == 17
     output = capsys.readouterr()
     assert 'human-secret' not in output.err + output.out
     assert 'human-id' not in output.err + output.out
