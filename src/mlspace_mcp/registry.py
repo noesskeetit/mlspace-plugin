@@ -651,9 +651,23 @@ def _build_handler(dt: DomainTool, actions: list[str], settings: Settings):
             # Protocol-correct failure: raising out of the tool makes FastMCP set
             # CallToolResult.isError=true, so a refusal (preflight, 4xx/5xx, missing
             # confirm, route-confusion) is no longer indistinguishable from success.
-            # ToolError carries the SAME human text the caller used to receive as a
-            # string (exc.to_text(), message + hint); FastMCP surfaces it verbatim.
-            raise ToolError(exc.to_text()) from exc
+            message = exc.to_text()
+            if (dt.domain, action) in {
+                ("resources", "instance_types"),
+                ("allocations", "list_instance_types"),
+                ("queues", "instance_types"),
+            }:
+                # Keep the original API error and isError=true. A failed scoped
+                # read must not invite the model to use the broad catalog instead.
+                message += (
+                    "\nLaunch availability is unverified. This failed call supplies no "
+                    "verified launch candidates. Stop launch preparation and report "
+                    "the unresolved access/scope to the user. Do not substitute "
+                    "regional configs, broaden allocation/queue filters, propose an "
+                    "instance/image combination, or request launch confirmation "
+                    "until availability for the intended placement is verified."
+                )
+            raise ToolError(message) from exc
         except Exception as exc:  # unexpected: still surface as isError=true, not a crash
             logger.exception("tool %s action=%s failed unexpectedly", dt.name, action)
             raise ToolError(f"Error: unexpected failure ({type(exc).__name__}).") from exc

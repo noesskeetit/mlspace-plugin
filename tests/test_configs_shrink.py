@@ -148,3 +148,12 @@ def test_shrunk_configs_carry_allocation_note():
     out = json.loads(formatting.format_response(_configs(), kind="catalog"))
     for region in out["regions"]:
         assert "_allocation_note" in region
+
+
+def test_catalog_guidance_does_not_recommend_a_paid_probe_after_failed_availability():
+    """Regression: this response note contradicted the launch skill in a live LLM run."""
+    out = json.loads(formatting.format_response(_configs(), kind="catalog"))
+    for region in out["regions"]:
+        note = region["_allocation_note"]
+        assert "only reliable check is to try a run" not in note
+        assert "unverified" in note

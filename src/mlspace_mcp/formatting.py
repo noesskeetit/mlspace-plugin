@@ -43,11 +43,13 @@ _REDACTED = "<redacted>"
 # region's full catalog, NOT what the caller's allocation actually grants. Worded
 # without any ": " so it can't trip the compact-catalog separator assertions.
 _ALLOCATION_NOTE = (
-    "instance_types here is the region's full catalog and is NOT filtered by your "
-    "allocation. A catalog-valid type can still be rejected at submit with a 400 "
-    "«not available in the allocation <tariff>»; the per-allocation availability "
-    "endpoint (mlspace_resources instance_types) may return 405 on PAYG — so the "
-    "only reliable check is to try a run."
+    "This is the region's full catalog, not the selected workspace/allocation/queue's "
+    "available launch options. For MT job launch preparation use only keys from a successful "
+    "scoped mlspace_resources instance_types response and look up their specs/images "
+    "here. If that availability check failed (including 403/405), eligibility remains "
+    "unverified: stop preparation and resolve access or placement. Do not offer "
+    "catalog-only candidates or try a paid job to test access. A successful read "
+    "is still a point-in-time observation, not a scheduling guarantee."
 )
 
 # Marker that replaces a repo list element's heavy recent_image.extra_attrs (~39%

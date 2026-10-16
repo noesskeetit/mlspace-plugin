@@ -59,7 +59,10 @@ ACTIONS: dict[str, Op] = {
         kind="list",
         help="Discover allocations for the selected workspace before job placement. "
         "Use target; workspace_id is auto-filled. Preserve IDs, exact names, "
-        "region_key and default_for_job; do not infer region from the name.",
+        "region_key and default_for_job; do not infer region from the name. "
+        "When multiple allocations match and the user has not chosen or delegated "
+        "the choice, present the alternatives and ask before reading queues/resources. "
+        "A default_for_job flag is not user approval to select it.",
     ),
     "allocation_queues": Op(
         "GET",

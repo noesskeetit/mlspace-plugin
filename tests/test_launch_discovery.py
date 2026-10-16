@@ -62,11 +62,38 @@ async def test_workspace_placement_reads_preserve_inventory_scope_and_availabili
             if availability_status == 200:
                 assert await read(RESOURCES, "instance_types", **args) == availability
             else:
-                with pytest.raises(ToolError):
+                with pytest.raises(ToolError, match="Launch availability is unverified") as error:
                     await read(RESOURCES, "instance_types", **args)
+                assert "403" in str(error.value)
         assert not personal.called
         for route in (inventory, queue_list, available):
             assert route.call_count == 1
             assert route.calls[0].request.headers["x-workspace-id"] == "workspace-b"
         assert all(call.request.method == "GET" or str(call.request.url) == AUTH_URL
                    for call in mock.calls)
+
+
+@pytest.mark.parametrize("domain_name,action,argument,path", [
+    ("allocations", "list_instance_types", "allocation_id",
+     "/public/v2/allocations/placement-id/instance-types"),
+    ("queues", "instance_types", "queue_id",
+     "/public/v2/queues/placement-id/instance-types"),
+])
+async def test_failed_scoped_detail_does_not_suggest_catalog_fallback(
+    domain_name, action, argument, path,
+):
+    from importlib import import_module
+
+    domain = import_module(f"mlspace_mcp.tools.{domain_name}").DOMAIN
+    settings = make_settings()
+    call = _build_handler(domain, available_actions(domain, True), settings)
+    with respx.mock() as mock:
+        mock.post(AUTH_URL).respond(
+            200, json={"token": {"access_token": "token", "expires_in": 3600}})
+        route = mock.get(BASE_URL + path).respond(403, json={"detail": "Forbidden"})
+        async with httpx.AsyncClient() as http:
+            with pytest.raises(ToolError, match="Launch availability is unverified") as error:
+                await call(action=action, **{argument: "placement-id"},
+                           ctx=runtime_ctx(http, settings))
+        assert "403" in str(error.value)
+        assert route.call_count == 1

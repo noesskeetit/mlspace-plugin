@@ -20,7 +20,9 @@ ACTIONS: dict[str, Op] = {
         kind="catalog",
         help="Get regional instance specifications and compatible images for Jobs/Notebooks. "
         "Catalog membership does not establish availability in a workspace allocation "
-        "or queue; use instance_types with the selected placement before a job run.",
+        "or queue. For a job, first get a successful scoped instance_types result, then "
+        "use configs only for those returned keys. Never use configs as a fallback "
+        "after a failed availability check or offer configs-only keys as launch options.",
     ),
     "instance_types": Op(
         "GET", "/public/v2/instance_types/{region}/available",
@@ -31,7 +33,9 @@ ACTIONS: dict[str, Op] = {
         help="Check instance types for the selected target and region. Pass the selected "
         "allocation_name and queue_name when applicable; omitted names use defaults. "
         "Use this scoped result with configs for job placement. Counts are a snapshot, "
-        "not a reservation; do not select by GPU count alone.",
+        "not a reservation. Only returned keys are launch candidates; look up their "
+        "specifications/images in configs. If this call fails, stop launch preparation "
+        "and report unverified availability; never replace it with catalog choices.",
     ),
     "nodes": Op(
         "GET", "/public/v2/nodes/{region}/nodes",
