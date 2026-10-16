@@ -84,6 +84,10 @@ ACTIONS: dict[str, Op] = {
         write=True,
         help="Run a training job; `body` = RunJobRequest: "
         "{script, base_image, instance_type, region, type, n_workers, ...}. "
+        "Before submission, show and confirm workspace name/ID, region, allocation/queue "
+        "or explained defaults, scoped available instance type, image:tag and command. "
+        "Discover placement via mlspace_workspaces allocations/allocation_queues and "
+        "mlspace_resources instance_types; configs alone is not eligibility evidence. "
         "NOTE: `region` must be explicit. For type=binary, `script` is a non-empty "
         "command or executable path and is forwarded unchanged; verify that it is "
         "available in the selected image. Other job types require an NFS script path "

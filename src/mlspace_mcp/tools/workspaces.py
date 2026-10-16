@@ -57,7 +57,9 @@ ACTIONS: dict[str, Op] = {
         path_params={"workspace_id": "workspace_id"},
         required=("workspace_id",),
         kind="list",
-        help="List a workspace's allocations.",
+        help="Discover allocations for the selected workspace before job placement. "
+        "Use target; workspace_id is auto-filled. Preserve IDs, exact names, "
+        "region_key and default_for_job; do not infer region from the name.",
     ),
     "allocation_queues": Op(
         "GET",
@@ -65,7 +67,9 @@ ACTIONS: dict[str, Op] = {
         path_params={"workspace_id": "workspace_id", "allocation_id": "allocation_id"},
         required=("workspace_id", "allocation_id"),
         kind="list",
-        help="List queues for one allocation in a workspace.",
+        help="Discover queues for the selected workspace and allocation before job placement. "
+        "Check allocation_id, active and default_for_job; an empty result "
+        "does not establish PAYG or absence of default scheduling.",
     ),
     # NOTE: bootstrap (POST /workspaces/v3/) and debootstrap (DELETE /workspaces/v3/)
     # are intentionally NOT exposed — see the SAFETY note in the module docstring.

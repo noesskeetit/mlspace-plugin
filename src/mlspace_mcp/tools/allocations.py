@@ -15,7 +15,9 @@ ACTIONS: dict[str, Op] = {
     "list": Op(
         "GET", "/public/v2/allocations/",
         kind="list",
-        help="List allocations in the workspace (personal account only).",
+        help="Personal-account allocation listing; not supported for service accounts. "
+        "For job placement and workspace allocation discovery use "
+        "mlspace_workspaces action=allocations with target instead.",
     ),
     "list_defaults": Op(
         "GET", "/public/v2/allocations/defaults",

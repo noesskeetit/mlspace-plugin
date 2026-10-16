@@ -18,7 +18,9 @@ ACTIONS: dict[str, Op] = {
         query_params={"cluster_type": "cluster_type"},
         required=("cluster_type",),
         kind="catalog",
-        help="Get region configs: available instance_types and images for Jobs/Notebooks.",
+        help="Get regional instance specifications and compatible images for Jobs/Notebooks. "
+        "Catalog membership does not establish availability in a workspace allocation "
+        "or queue; use instance_types with the selected placement before a job run.",
     ),
     "instance_types": Op(
         "GET", "/public/v2/instance_types/{region}/available",
@@ -26,7 +28,10 @@ ACTIONS: dict[str, Op] = {
         query_params={"allocation_name": "allocation_name", "queue_name": "queue_name"},
         required=("region",),
         kind="list",
-        help="List available instance types by connected allocation in a region.",
+        help="Check instance types for the selected target and region. Pass the selected "
+        "allocation_name and queue_name when applicable; omitted names use defaults. "
+        "Use this scoped result with configs for job placement. Counts are a snapshot, "
+        "not a reservation; do not select by GPU count alone.",
     ),
     "nodes": Op(
         "GET", "/public/v2/nodes/{region}/nodes",
